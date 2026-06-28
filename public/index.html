@@ -1016,6 +1016,7 @@
                         <span>first_frame_image</span>
                         <div style="display:flex;gap:6px;align-items:center;">
                           <button onclick="vrefPickOpen('first')" style="background:none;border:1px solid var(--border);border-radius:5px;color:var(--text-muted);font-size:11px;cursor:pointer;padding:2px 8px;" title="Выбрать из библиотеки">📁 Библ.</button>
+                          <button id="vgen-analyze-btn" onclick="vgenAnalyzeImage()" style="background:none;border:1px solid rgba(108,99,255,0.4);border-radius:5px;color:var(--accent);font-size:11px;cursor:pointer;padding:2px 8px;display:none;" title="Анализ фото через GPT-4o — добавит описание товара в промт">🔍 Анализ</button>
                           <button onclick="vgenClearImage('first')" style="background:none;border:none;color:#ef4444;font-size:11px;cursor:pointer;display:none;" id="vgen-clear-first">✕</button>
                         </div>
                       </label>
@@ -1835,10 +1836,20 @@ function vrefRender() {
     const div = document.createElement('div');
     div.className = 'vref-card';
     div.style.cssText = 'position:relative;border-radius:8px;overflow:hidden;border:1px solid var(--border);cursor:' + (isPick ? 'pointer' : 'default') + ';transition:border-color 0.15s;';
+    const badgeHtml = img.badge === 'upscaled'
+      ? '<span style="position:absolute;top:3px;left:3px;background:#6c63ff;color:#fff;font-size:8px;font-weight:700;border-radius:3px;padding:1px 4px;">⬆️2K</span>'
+      : img.badge === 'multiangle'
+      ? '<span style="position:absolute;top:3px;left:3px;background:#059669;color:#fff;font-size:8px;font-weight:700;border-radius:3px;padding:1px 4px;">📐</span>'
+      : '';
     div.innerHTML = `
-      <img src="${img.data}" style="width:100%;height:90px;object-fit:cover;display:block;" loading="lazy">
-      <div class="vref-card-footer" style="padding:4px 6px;background:var(--card-bg);display:flex;align-items:center;gap:4px;">
+      <div style="position:relative;">
+        <img src="${img.data}" style="width:100%;height:90px;object-fit:cover;display:block;" loading="lazy">
+        ${badgeHtml}
+      </div>
+      <div class="vref-card-footer" style="padding:4px 6px;background:var(--card-bg);display:flex;align-items:center;gap:3px;">
         <span style="flex:1;font-size:10px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${img.name}">${img.name}</span>
+        <button id="vref-upscale-${img.id}" onclick="event.stopPropagation();vrefKieProcess(${img.id},'upscale')" style="background:none;border:1px solid rgba(108,99,255,0.3);border-radius:3px;color:var(--accent);cursor:pointer;font-size:9px;padding:1px 4px;white-space:nowrap;" title="Апскейл до 2K через KIE">⬆️</button>
+        <button id="vref-multiangle-${img.id}" onclick="event.stopPropagation();vrefKieProcess(${img.id},'multiangle')" style="background:none;border:1px solid rgba(5,150,105,0.4);border-radius:3px;color:#059669;cursor:pointer;font-size:9px;padding:1px 4px;white-space:nowrap;" title="Мультиракурс через KIE">📐</button>
         <button onclick="event.stopPropagation();vrefDelete(${img.id})" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:12px;padding:0;line-height:1;" title="Удалить">✕</button>
       </div>`;
     if (isPick) {
@@ -2136,6 +2147,11 @@ function vgenSetImage(slot, dataUrl) {
   ph.style.display = 'none';
   if (clearBtn) clearBtn.style.display = 'inline';
   vgenState[slot + 'ImageUrl'] = dataUrl;
+  // Show analyze button when first frame is loaded
+  if (slot === 'first') {
+    const ab = document.getElementById('vgen-analyze-btn');
+    if (ab) ab.style.display = 'inline';
+  }
 }
 function vgenClearImage(slot) {
   const preview = document.getElementById(`vgen-${slot}-preview`);
@@ -2147,6 +2163,119 @@ function vgenClearImage(slot) {
   if (clearBtn) clearBtn.style.display = 'none';
   if (input) input.value = '';
   vgenState[slot + 'ImageUrl'] = null;
+  if (slot === 'first') {
+    const ab = document.getElementById('vgen-analyze-btn');
+    if (ab) ab.style.display = 'none';
+  }
+}
+
+// ── GPT-4 Vision: анализ референсного фото ──
+async function vgenAnalyzeImage() {
+  const base64 = vgenState.firstImageUrl;
+  if (!base64) return;
+  const openaiKey = localStorage.getItem('openai_api_key') || '';
+  if (!openaiKey) {
+    alert('Добавьте OpenAI API ключ в ⚙️ Настройках для анализа фото');
+    return;
+  }
+  const btn = document.getElementById('vgen-analyze-btn');
+  if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
+  try {
+    const r = await fetch('/api/analyze-image', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ base64, openaiKey })
+    });
+    const d = await r.json();
+    if (d.ok && d.description) {
+      const promptEl = document.getElementById('vgen-prompt');
+      if (promptEl) {
+        const existing = promptEl.value.trim();
+        const tag = `\n\n[PRODUCT REFERENCE: ${d.description}]`;
+        promptEl.value = existing + tag;
+        promptEl.style.borderColor = 'var(--accent)';
+        setTimeout(() => promptEl.style.borderColor = 'var(--border)', 2000);
+      }
+      if (btn) { btn.textContent = '✓ Готово'; setTimeout(() => { btn.textContent = '🔍 Анализ'; btn.disabled = false; }, 2000); }
+    } else {
+      if (btn) { btn.textContent = '❌ Ошибка'; setTimeout(() => { btn.textContent = '🔍 Анализ'; btn.disabled = false; }, 2000); }
+    }
+  } catch (e) {
+    if (btn) { btn.textContent = '🔍 Анализ'; btn.disabled = false; }
+  }
+}
+
+// ── KIE Image processing: апскейл и мультиракурс ──
+async function vrefKieProcess(imgId, type) {
+  const images = vrefGetImages();
+  const img = images.find(i => i.id === imgId);
+  if (!img) return;
+  const kieApiKey = localStorage.getItem('kie_api_key') || '';
+  if (!kieApiKey) { alert('Нужен KIE API ключ в ⚙️ Настройках'); return; }
+
+  const endpoint = type === 'upscale' ? '/api/kie/upscale-image' : '/api/kie/multiangle-image';
+  const btnId = `vref-${type}-${imgId}`;
+  const btn = document.getElementById(btnId);
+  if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
+
+  try {
+    const body = { base64: img.data, kieKey: kieApiKey };
+    if (type === 'multiangle' && img.description) body.productDescription = img.description;
+
+    const r = await fetch(endpoint, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const d = await r.json();
+    if (!d.ok || !d.taskId) {
+      if (btn) { btn.textContent = type === 'upscale' ? '⬆️ Апскейл' : '📐 Ракурс'; btn.disabled = false; }
+      alert('Ошибка: ' + (d.error || 'неизвестно')); return;
+    }
+
+    // Poll for result
+    if (btn) btn.textContent = '⏳ …';
+    let attempt = 0;
+    const poll = async () => {
+      attempt++;
+      const sr = await fetch('/api/kie/image-status/' + d.taskId, {
+        headers: { 'x-kie-key': kieApiKey }
+      });
+      const sd = await sr.json();
+      if (sd.status === 'success' && sd.url) {
+        // Fetch result image as base64 and save to library
+        const imgR = await fetch(sd.url);
+        const blob = await imgR.blob();
+        const reader = new FileReader();
+        reader.onload = e => {
+          const newImg = {
+            id: Date.now() + Math.random(),
+            name: (type === 'upscale' ? '⬆️ ' : '📐 ') + img.name,
+            data: e.target.result,
+            added: Date.now(),
+            badge: type === 'upscale' ? 'upscaled' : 'multiangle',
+            sourceId: imgId,
+          };
+          const imgs = vrefGetImages();
+          imgs.unshift(newImg);
+          vrefSaveImages(imgs);
+          vrefRender();
+          if (btn) { btn.textContent = '✓ Сохранено'; setTimeout(() => { btn.textContent = type === 'upscale' ? '⬆️ Апскейл' : '📐 Ракурс'; btn.disabled = false; }, 2500); }
+        };
+        reader.readAsDataURL(blob);
+      } else if (sd.status === 'failed') {
+        if (btn) { btn.textContent = type === 'upscale' ? '⬆️ Апскейл' : '📐 Ракурс'; btn.disabled = false; }
+        alert('Обработка не удалась: ' + (sd.error || ''));
+      } else if (attempt < 60) {
+        setTimeout(poll, 5000);
+      } else {
+        if (btn) { btn.textContent = type === 'upscale' ? '⬆️ Апскейл' : '📐 Ракурс'; btn.disabled = false; }
+      }
+    };
+    setTimeout(poll, 5000);
+  } catch (e) {
+    if (btn) { btn.textContent = type === 'upscale' ? '⬆️ Апскейл' : '📐 Ракурс'; btn.disabled = false; }
+    alert('Ошибка: ' + e.message);
+  }
 }
 
 // Upload image to server (base64 → URL)

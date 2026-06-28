@@ -146,6 +146,142 @@ app.post('/api/kie/upload-image', async (req, res) => {
   }
 });
 
+// ── GPT-4 Vision: анализ фото товара ──
+app.post('/api/analyze-image', async (req, res) => {
+  try {
+    const { base64, openaiKey } = req.body || {};
+    const key = openaiKey || process.env.OPENAI_API_KEY || '';
+    if (!base64) return res.json({ ok: false, error: 'base64 не передан' });
+    if (!key) return res.json({ ok: false, error: 'Нужен OpenAI API ключ' });
+
+    // Ensure base64 has data URI prefix
+    const dataUrl = base64.startsWith('data:') ? base64 : 'data:image/jpeg;base64,' + base64;
+
+    const r = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        max_tokens: 800,
+        messages: [{
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: `Analyze this product image in detail for use as a video generation reference.
+Describe in English:
+1. Product type and name
+2. Exact colors (primary, secondary, accents)
+3. Materials and textures visible
+4. Design details, patterns, logos, text
+5. Shape, dimensions impression, style
+6. Any unique distinguishing features
+Be specific and detailed. Focus on visual details that must be preserved in video generation.
+Output ONLY the description, no intro phrases.`
+            },
+            { type: 'image_url', image_url: { url: dataUrl, detail: 'high' } }
+          ]
+        }]
+      })
+    });
+    const data = await r.json();
+    if (data.error) return res.json({ ok: false, error: data.error.message });
+    const description = data.choices?.[0]?.message?.content?.trim() || '';
+    res.json({ ok: true, description });
+  } catch (e) {
+    res.json({ ok: false, error: e.message });
+  }
+});
+
+// ── KIE gpt-image-2: апскейл / мультиракурс через image-to-image ──
+async function kieImageToImage(imageUrl, prompt, kieApiKey, resolution = '2K') {
+  const data = await kiePost('/jobs/createTask', {
+    model: 'gpt-image-2-image-to-image',
+    input: { prompt, input_urls: [imageUrl], resolution, aspect_ratio: '1:1' }
+  }, kieApiKey);
+  return data;
+}
+
+app.post('/api/kie/upscale-image', async (req, res) => {
+  try {
+    const { base64, kieKey: clientKieKey } = req.body || {};
+    const reqKey = clientKieKey || req.headers['x-kie-key'] || kieKey();
+    if (!base64) return res.json({ ok: false, error: 'base64 не передан' });
+    if (!reqKey) return res.json({ ok: false, error: 'KIE ключ не задан' });
+
+    // Upload image first
+    const { FormData, File } = await import('formdata-node');
+    const buf = Buffer.from(base64.replace(/^data:[^;]+;base64,/, ''), 'base64');
+    const form = new FormData();
+    form.set('file', new File([buf], 'image.jpg', { type: 'image/jpeg' }));
+    const upRes = await fetch(KIE_BASE + '/upload', {
+      method: 'POST', headers: { 'Authorization': 'Bearer ' + reqKey }, body: form
+    });
+    const upData = await upRes.json();
+    if (!upData?.data?.url) return res.json({ ok: false, error: upData?.msg || 'Ошибка загрузки' });
+    const imageUrl = upData.data.url;
+
+    // Create upscale task
+    const data = await kieImageToImage(
+      imageUrl,
+      'Upscale this image to maximum quality. Preserve every detail exactly as in the original — colors, textures, composition, subject. Sharpen, enhance clarity and resolution. Do not change anything about the subject.',
+      reqKey, '2K'
+    );
+    if (!data?.data?.taskId) return res.json({ ok: false, error: data?.msg || JSON.stringify(data) });
+    res.json({ ok: true, taskId: data.data.taskId });
+  } catch (e) {
+    res.json({ ok: false, error: e.message });
+  }
+});
+
+app.post('/api/kie/multiangle-image', async (req, res) => {
+  try {
+    const { base64, kieKey: clientKieKey, productDescription = '' } = req.body || {};
+    const reqKey = clientKieKey || req.headers['x-kie-key'] || kieKey();
+    if (!base64) return res.json({ ok: false, error: 'base64 не передан' });
+    if (!reqKey) return res.json({ ok: false, error: 'KIE ключ не задан' });
+
+    const { FormData, File } = await import('formdata-node');
+    const buf = Buffer.from(base64.replace(/^data:[^;]+;base64,/, ''), 'base64');
+    const form = new FormData();
+    form.set('file', new File([buf], 'image.jpg', { type: 'image/jpeg' }));
+    const upRes = await fetch(KIE_BASE + '/upload', {
+      method: 'POST', headers: { 'Authorization': 'Bearer ' + reqKey }, body: form
+    });
+    const upData = await upRes.json();
+    if (!upData?.data?.url) return res.json({ ok: false, error: upData?.msg || 'Ошибка загрузки' });
+
+    const desc = productDescription ? ` Product: ${productDescription.slice(0, 200)}.` : '';
+    const data = await kieImageToImage(
+      upData.data.url,
+      `Product reference sheet showing this exact product from 4 angles: front view top-left, side view top-right, back view bottom-left, 45-degree angle bottom-right. Clean white background, professional studio lighting, product photography.${desc} Preserve all product details, colors, textures, logos exactly as shown.`,
+      reqKey, '2K'
+    );
+    if (!data?.data?.taskId) return res.json({ ok: false, error: data?.msg || JSON.stringify(data) });
+    res.json({ ok: true, taskId: data.data.taskId });
+  } catch (e) {
+    res.json({ ok: false, error: e.message });
+  }
+});
+
+// ── KIE image task status (для upscale/multiangle) ──
+app.get('/api/kie/image-status/:taskId', async (req, res) => {
+  try {
+    const reqKey = req.headers['x-kie-key'] || kieKey();
+    const data = await kieGet('/jobs/recordInfo?taskId=' + req.params.taskId, reqKey);
+    const task = data.data || data;
+    if (task.state === 'success') {
+      let urls = [];
+      try { urls = JSON.parse(task.resultJson || '{}').resultUrls || []; } catch {}
+      return res.json({ status: 'success', url: urls[0] || '', urls });
+    }
+    if (task.state === 'fail') return res.json({ status: 'failed', error: task.failMsg || 'Ошибка' });
+    res.json({ status: 'pending', state: task.state });
+  } catch (e) {
+    res.json({ status: 'error', error: e.message });
+  }
+});
+
 // ── Enhance prompt via Claude (Anthropic direct or OpenRouter) ──
 
 function buildTimeMarkers(duration) {
