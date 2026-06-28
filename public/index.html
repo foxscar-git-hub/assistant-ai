@@ -1531,10 +1531,13 @@ async function vgenEnhancePrompt() {
     const headers = { 'Content-Type': 'application/json' };
     if (anthropicKey)  headers['x-anthropic-key']  = anthropicKey;
     if (openrouterKey) headers['x-openrouter-key'] = openrouterKey;
+    // Включаем информацию о загруженных референсных изображениях
+    const hasFirstFrame = !!vgenState.firstImageUrl;
+    const hasLastFrame  = !!vgenState.lastImageUrl;
     const r = await fetch('/api/enhance-prompt', {
       method: 'POST',
       headers,
-      body: JSON.stringify({ prompt, model, format, duration: dur }),
+      body: JSON.stringify({ prompt, model, format, duration: dur, hasFirstFrame, hasLastFrame }),
     });
     const d = await r.json();
     if (d.ok && d.enhanced) {

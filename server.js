@@ -172,7 +172,8 @@ const FORMAT_NAMES = {
 
 app.post('/api/enhance-prompt', async (req, res) => {
   try {
-    const { prompt, model = 'seedance', format = 'cinematic', duration = 5 } = req.body;
+    const { prompt, model = 'seedance', format = 'cinematic', duration = 5,
+            hasFirstFrame = false, hasLastFrame = false } = req.body;
     if (!prompt) return res.json({ ok: false, error: 'prompt пуст' });
 
     const anthropicKey  = req.headers['x-anthropic-key'] || process.env.ANTHROPIC_API_KEY || '';
@@ -186,11 +187,18 @@ app.post('/api/enhance-prompt', async (req, res) => {
     const systemPrompt = systemFn(duration, format);
     const modelName = model === 'veo' ? 'Veo 3' : model === 'omni' ? 'Gemini Omni' : 'Seedance 2.0';
 
+    const refLines = [];
+    if (hasFirstFrame) refLines.push('- FIRST FRAME reference image is provided (the video starts from this image — describe how the scene opens FROM this visual)');
+    if (hasLastFrame)  refLines.push('- LAST FRAME reference image is provided (the video ends ON this image — describe how the scene transitions INTO this final visual)');
+    const refNote = refLines.length > 0
+      ? `\nReference images:\n${refLines.join('\n')}\nIMPORTANT: Integrate reference image instructions naturally into the prompt using "[reference_image: first_frame]" or "[reference_image: last_frame]" bracket tags where appropriate.`
+      : '';
+
     const userMsg = `Original idea (may be in Russian or any language): "${prompt}"
 
 Model: ${modelName}
 Duration: ${duration} seconds
-Format: ${FORMAT_NAMES[format] || format}
+Format: ${FORMAT_NAMES[format] || format}${refNote}
 
 Rewrite into an optimized ${modelName} video generation prompt. Include precise time markers for ${duration}s. Output only the prompt.`;
 
@@ -260,16 +268,18 @@ app.post('/api/videogen', async (req, res) => {
     if (!prompt) return res.json({ ok: false, error: 'prompt обязателен' });
     if (!reqKey) return res.json({ ok: false, error: 'KIE API ключ не задан' });
 
-    // Model ID mapping
+    // Model ID mapping (verified from KIE playground pages)
     const MODEL_IDS = {
       seedance_pro:  'bytedance/seedance-2',
       seedance_fast: 'bytedance/seedance-2-fast',
-      veo:           'google/veo-3-fast',
-      omni:          'google/gemini-omni',
+      veo:           'veo-3-1',
+      omni_video:    'gemini-omni-video',
+      omni_audio:    'gemini-omni-audio',
+      omni_char:     'gemini-omni-character',
     };
     let modelId;
     if (modelType === 'veo')  modelId = MODEL_IDS.veo;
-    else if (modelType === 'omni') modelId = MODEL_IDS.omni;
+    else if (modelType === 'omni') modelId = MODEL_IDS.omni_video;
     else modelId = quality === 'pro' ? MODEL_IDS.seedance_pro : MODEL_IDS.seedance_fast;
 
     const input = { prompt, resolution, aspect_ratio, duration: parseInt(duration), nsfw_checker: true };
