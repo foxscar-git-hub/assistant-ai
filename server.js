@@ -282,17 +282,27 @@ app.post('/api/videogen', async (req, res) => {
     else if (modelType === 'omni') modelId = MODEL_IDS.omni_video;
     else modelId = quality === 'pro' ? MODEL_IDS.seedance_pro : MODEL_IDS.seedance_fast;
 
-    // Normalize resolution per model requirements
-    let resolNorm = resolution;
+    // Normalize resolution and duration per model
+    let resolNorm = resolution || '720p';
+    let dur = parseInt(duration) || 5;
+
     if (modelType === 'omni') {
-      // Omni: 720P / 1080P / 4k (capital P, no 480p)
-      const map = { '480p': '720P', '720p': '720P', '1080p': '1080P', '4k': '4k', '4K': '4k' };
-      resolNorm = map[resolution] || '720P';
+      // Omni: only 720p / 1080p / 4k (lowercase), no 480p
+      if (!['720p','1080p','4k'].includes(resolNorm)) resolNorm = '720p';
+      // Omni: only discrete values 4, 6, 8, 10
+      const omniDurs = [4, 6, 8, 10];
+      dur = omniDurs.reduce((prev, curr) => Math.abs(curr - dur) < Math.abs(prev - dur) ? curr : prev);
     } else if (modelType === 'veo') {
-      // Veo: 720p / 1080p only
-      resolNorm = resolution === '1080p' ? '1080p' : '720p';
+      // Veo: only 720p / 1080p, duration 4/6/8
+      if (!['720p','1080p'].includes(resolNorm)) resolNorm = '720p';
+      const veoDurs = [4, 6, 8];
+      dur = veoDurs.reduce((prev, curr) => Math.abs(curr - dur) < Math.abs(prev - dur) ? curr : prev);
+    } else {
+      // Seedance: 480p/720p/1080p/4k, duration 4-15
+      if (!['480p','720p','1080p','4k','4K'].includes(resolNorm)) resolNorm = '720p';
+      dur = Math.max(4, Math.min(15, dur));
     }
-    const input = { prompt, resolution: resolNorm, aspect_ratio, duration: String(parseInt(duration)), nsfw_checker: true };
+    const input = { prompt, resolution: resolNorm, aspect_ratio, duration: String(dur), nsfw_checker: true };
     if (image_url) input.first_frame_url = image_url;
     if (end_image_url) input.last_frame_url = end_image_url;
     const data = await kiePost('/jobs/createTask', { model: modelId, input }, reqKey);
