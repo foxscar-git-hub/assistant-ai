@@ -939,6 +939,8 @@ function openPage(id) {
   // hide all pages
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById('page-' + id)?.classList.add('active');
+  // Restore video generation state if returning to video page
+  if (id === 'wip-video') setTimeout(vgenRestoreIfActive, 50);
 
   // update nav active state
   document.querySelectorAll('.nav-item').forEach(el => {
@@ -1706,17 +1708,23 @@ function vgenShowError(msg) {
 }
 
 async function vgenPoll(taskId, startTime, attempt) {
+  // Persist active task so we can restore on page revisit
+  sessionStorage.setItem('vgen_active_task', JSON.stringify({ taskId, startTime, attempt }));
   try {
-    const r = await fetch('/api/videogen/status/' + taskId);
+    const kieKey = localStorage.getItem('kie_api_key') || '';
+    const headers = kieKey ? { 'x-kie-key': kieKey } : {};
+    const r = await fetch('/api/videogen/status/' + taskId, { headers });
     const d = await r.json();
     const elapsed = Math.round((Date.now() - startTime) / 1000);
     if (d.status === 'success') {
+      sessionStorage.removeItem('vgen_active_task');
       vgenShowResult(d.url, d.credits, d.costTime);
       const btn = document.getElementById('vgen-run-btn');
       if (btn) { btn.disabled = false; btn.innerHTML = '▶ Run'; }
       return;
     }
     if (d.status === 'failed') {
+      sessionStorage.removeItem('vgen_active_task');
       vgenShowError(d.error || 'Генерация не удалась');
       const btn = document.getElementById('vgen-run-btn');
       if (btn) { btn.disabled = false; btn.innerHTML = '▶ Run'; }
@@ -1726,11 +1734,28 @@ async function vgenPoll(taskId, startTime, attempt) {
     const pct = Math.min(5 + attempt * 3, 85);
     vgenAnimateProgress(pct);
     const msg = document.getElementById('vgen-progress-msg');
-    if (msg) msg.textContent = `Обработка... ${elapsed}с (попытка ${attempt})`;
+    if (msg) msg.textContent = `⏳ Генерация... ${elapsed}с`;
     vgenState.pollTimer = setTimeout(() => vgenPoll(taskId, startTime, attempt + 1), 4000);
   } catch (e) {
     vgenShowError('Ошибка проверки статуса: ' + e.message);
+    sessionStorage.removeItem('vgen_active_task');
   }
+}
+
+// Restore in-progress generation when user navigates back to video page
+function vgenRestoreIfActive() {
+  const saved = sessionStorage.getItem('vgen_active_task');
+  if (!saved) return;
+  try {
+    const { taskId, startTime, attempt } = JSON.parse(saved);
+    if (!taskId) return;
+    if (vgenState.pollTimer) return; // already polling
+    // Show progress indicator
+    vgenShowProgress(`Генерация в процессе... task: ${taskId.slice(0, 8)}…`);
+    const btn = document.getElementById('vgen-run-btn');
+    if (btn) { btn.disabled = true; btn.innerHTML = '⏳ Генерация...'; }
+    vgenPoll(taskId, startTime, attempt);
+  } catch {}
 }
 
 async function vgenRun() {

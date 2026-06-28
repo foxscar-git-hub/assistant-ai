@@ -1,5 +1,14 @@
 [
   {
+    "taskId": "d8b8985fb8343f19ade30d2cebdbad86",
+    "model": "gemini-omni-video",
+    "state": "success",
+    "createdAt": "2026-06-28T12:44:32.542Z",
+    "input": "{\"prompt\":\"[reference_image: first_frame] Opening wide-angle shot from slightly above, capturing a minimalist modern living room bathed in soft morning sunlight streaming through sheer white curtains. Warm golden light creates gentle highlights on pale oak flooring. A pair of vibrant Ameza socks in bold geometric patterns—deep teal, burnt orange, and cream stripes—lies artfully placed on a clean white surface beside a steaming ceramic mug and an open book. The composition feels effortless, aspirational, cozy. Shallow depth of field keeps focus on the socks while background softly blurs.\\n\\n0–3s: Camera slowly pushes in toward the socks, revealing intricate knit texture and premium fabric sheen. Light dances across the woven patterns. A human hand enters frame from the right, fingers gently reaching for the socks with natural, unhurried movement.\\n\\n3–6s: Cut to close-up: hands pulling on the first Ameza sock in smooth, satisfying motion. The fabric stretches elegantly, hugging the foot perfectly. Camera circles 90 degrees to capture the profile, emphasizing comfort and fit. Second sock follows with same deliberate care. Warm color grading enhances the inviting atmosphere. Subtle text overlay appears: \\\"Ameza – Comfort Reimagined\\\" in clean sans-serif font, lower third.\\n\\n6–10s: [reference_image: last_frame] Camera pulls back to reveal full scene: person now standing confidently in complete casual outfit, Ameza socks prominently visible, feet planted on the sunlit floor. They take one relaxed step forward, socks flexing naturally. Final frame shows brand logo \\\"AMEZA\\\" materializing center screen in bold, modern typography with tagline beneath: \\\"Step into Quality.\\\" Atmosphere is aspirational yet authentic, mood serene and confident.\",\"resolution\":\"720p\",\"aspect_ratio\":\"9:16\",\"duration\":\"10\",\"nsfw_checker\":true}",
+    "resultJson": "{\"resultUrls\":[\"https://tempfile.aiquickdraw.com/v/d8b8985fb8343f19ade30d2cebdbad86_1782650720.mp4\"]}",
+    "creditsConsumed": 180
+  },
+  {
     "taskId": "3986aaba09932814e3d2ce9fa690a3bf",
     "model": "gemini-omni-video",
     "state": "processing",
