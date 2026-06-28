@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ассистент</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --sidebar-bg: #13151d;
+    --card-bg: #1a1d2e;
+    --border: #252840;
+    --accent: #6c63ff;
+    --accent2: #00c9a7;
+    --accent3: #ff6b6b;
+    --text: #e2e8f0;
+    --text-muted: #6b7280;
+    --radius: 8px;
+
+    --done-color: #00c9a7;
+    --done-bg: rgba(0,201,167,0.08);
+    --wip-color: #f59e0b;
+    --wip-bg: rgba(245,158,11,0.08);
+    --todo-color: #6b7280;
+    --todo-bg: rgba(107,114,128,0.06);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    display: flex;
+    overflow: hidden;
+    font-size: 14px;
+  }
+
+  /* ── Sidebar ── */
+  #sidebar {
+    width: 260px;
+    min-width: 260px;
+    background: var(--sidebar-bg);
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--border);
+    overflow: hidden;
+  }
+
+  .sidebar-header {
+    padding: 20px 16px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .logo-icon {
+    width: 34px;
+    height: 34px;
+    background: var(--accent);
+    border-radius: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+
+  .logo-title {
+    font-weight: 700;
+    font-size: 15px;
+    letter-spacing: -0.3px;
+  }
+
+  .sidebar-nav {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  /* scrollbar */
+  .sidebar-nav::-webkit-scrollbar { width: 4px; }
+  .sidebar-nav::-webkit-scrollbar-track { background: transparent; }
+  .sidebar-nav::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  /* Section block */
+  .nav-block {
+    margin-bottom: 4px;
+    border-radius: 10px;
+    border: 2px solid transparent;
+    padding: 4px;
+    transition: border-color 0.2s, background 0.2s;
+  }
+
+  .block-done { border-color: rgba(0,201,167,0.35); background: rgba(0,201,167,0.03); }
+  .block-wip  { border-color: rgba(245,158,11,0.35); background: rgba(245,158,11,0.03); }
+  .block-todo { border-color: rgba(239,68,68,0.35);  background: rgba(239,68,68,0.03);  }
+
+  .nav-block.drag-over-block { outline: 2px dashed var(--accent); outline-offset: 2px; }
+
+  .nav-block-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-radius: 7px;
+    user-select: none;
+    transition: background 0.15s;
+  }
+
+  .nav-block-header:hover { background: rgba(255,255,255,0.04); }
+
+  .nav-block-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .block-done .nav-block-dot { background: var(--done-color); }
+  .block-wip  .nav-block-dot { background: var(--wip-color); }
+  .block-todo .nav-block-dot { background: var(--todo-color); }
+
+  .nav-block-count {
+    margin-left: auto;
+    font-size: 11px;
+    background: rgba(255,255,255,0.06);
+    padding: 1px 6px;
+    border-radius: 10px;
+  }
+
+  .nav-block-arrow {
+    font-size: 10px;
+    transition: transform 0.2s;
+    color: var(--text-muted);
+  }
+  .nav-block.collapsed .nav-block-arrow { transform: rotate(-90deg); }
+  .nav-block.collapsed .nav-block-items { display: none; }
+
+  .nav-block-items {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    padding-bottom: 4px;
+    min-height: 4px;
+  }
+
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px 8px 26px;
+    border-radius: var(--radius);
+    cursor: grab;
+    transition: background 0.15s, opacity 0.15s;
+    color: var(--text-muted);
+    text-decoration: none;
+    font-size: 13.5px;
+    user-select: none;
+  }
+  .nav-item:active { cursor: grabbing; }
+  .nav-item.dragging { opacity: 0.4; }
+  .nav-item.drag-placeholder {
+    background: rgba(108,99,255,0.12);
+    border: 2px dashed rgba(108,99,255,0.4);
+    border-radius: var(--radius);
+    height: 36px;
+  }
+
+  .nav-item:hover { background: rgba(255,255,255,0.05); color: var(--text); }
+
+  .nav-item.active {
+    color: var(--text);
+    font-weight: 500;
+  }
+  .block-done .nav-item.active  { background: var(--done-bg); }
+  .block-wip  .nav-item.active  { background: var(--wip-bg); }
+  .block-todo .nav-item.active  { background: var(--todo-bg); }
+
+  .nav-item-icon { font-size: 15px; flex-shrink: 0; pointer-events: none; }
+
+  /* Divider between blocks */
+  .nav-divider {
+    height: 1px;
+    background: var(--border);
+    margin: 6px 4px;
+  }
+
+  /* ── Main ── */
+  #main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .topbar {
+    height: 56px;
+    display: flex;
+    align-items: center;
+    padding: 0 24px;
+    border-bottom: 1px solid var(--border);
+    gap: 12px;
+    flex-shrink: 0;
+  }
+
+  .topbar-title {
+    font-size: 16px;
+    font-weight: 600;
+  }
+
+  .topbar-badge {
+    font-size: 12px;
+    padding: 2px 10px;
+    border-radius: 20px;
+    font-weight: 500;
+  }
+
+  .badge-done { background: var(--done-bg); color: var(--done-color); }
+  .badge-wip  { background: var(--wip-bg);  color: var(--wip-color);  }
+  .badge-todo { background: var(--todo-bg); color: var(--todo-color); }
+
+  .content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 28px 32px;
+  }
+
+  .content::-webkit-scrollbar { width: 6px; }
+  .content::-webkit-scrollbar-track { background: transparent; }
+  .content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  /* Page sections — each nav item leads to its own view */
+  .page { display: none; }
+  .page.active { display: block; }
+
+  /* Generic card */
+  .card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 24px;
+    margin-bottom: 16px;
+  }
+
+  .card h3 { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
+  .card p  { color: var(--text-muted); font-size: 13px; line-height: 1.6; }
+
+  /* Empty state */
+  .empty-state {
+    text-align: center;
+    padding: 80px 20px;
+    color: var(--text-muted);
+  }
+  .empty-state .es-icon { font-size: 48px; margin-bottom: 16px; opacity: 0.4; }
+  .empty-state h3 { font-size: 16px; font-weight: 600; color: var(--text); margin-bottom: 8px; }
+  .empty-state p  { font-size: 13px; }
+</style>
+</head>
+<body>
+
+<!-- ── LEFT SIDEBAR ── -->
+<nav id="sidebar">
+  <div class="sidebar-header">
+    <div class="logo-icon">🤖</div>
+    <span class="logo-title" style="flex:1;">Ассистент</span>
+    <button onclick="openApiSettings()" title="Настройки API" style="background:none;border:none;cursor:pointer;font-size:16px;opacity:0.5;padding:4px 6px;border-radius:6px;transition:opacity 0.15s;line-height:1;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.5'">⚙️</button>
+  </div>
+
+  <div class="sidebar-nav">
+
+    <!-- БЛОК 1: ГОТОВО -->
+    <div class="nav-block block-done" id="block-done">
+      <div class="nav-block-header" onclick="toggleBlock('block-done')">
+        <span class="nav-block-dot"></span>
+        Готово
+        <span class="nav-block-count" id="count-done">0</span>
+        <span class="nav-block-arrow">▾</span>
+      </div>
+      <div class="nav-block-items" id="items-done">
+        <a class="nav-item" onclick="openPage('done-chat')" data-page="done-chat">
+          <span class="nav-item-icon">💬</span> Чат с Claude
+        </a>
+        <a class="nav-item" onclick="openPage('done-parser')" data-page="done-parser">
+          <span class="nav-item-icon">🔍</span> Парсер сайтов
+        </a>
+        <a class="nav-item" onclick="openPage('done-video')" data-page="done-video">
+          <span class="nav-item-icon">🎬</span> Генерация видео
+        </a>
+      </div>
+    </div>
+
+    <div class="nav-divider"></div>
+
+    <!-- БЛОК 2: В РАБОТЕ -->
+    <div class="nav-block block-wip" id="block-wip">
+      <div class="nav-block-header" onclick="toggleBlock('block-wip')">
+        <span class="nav-block-dot"></span>
+        В работе
+        <span class="nav-block-count" id="count-wip">0</span>
+        <span class="nav-block-arrow">▾</span>
+      </div>
+      <div class="nav-block-items" id="items-wip">
+        <a class="nav-item" onclick="openPage('wip-logs')" data-page="wip-logs">
+          <span class="nav-item-icon">📋</span> Логи задач
+        </a>
+        <a class="nav-item" onclick="openPage('wip-api')" data-page="wip-api">
+          <span class="nav-item-icon">🔑</span> Настройки API
+        </a>
+      </div>
+    </div>
+
+    <div class="nav-divider"></div>
+
+    <!-- БЛОК 3: НЕ ГОТОВО -->
+    <div class="nav-block block-todo" id="block-todo">
+      <div class="nav-block-header" onclick="toggleBlock('block-todo')">
+        <span class="nav-block-dot"></span>
+        Не готово
+        <span class="nav-block-count" id="count-todo">0</span>
+        <span class="nav-block-arrow">▾</span>
+      </div>
+      <div class="nav-block-items" id="items-todo">
+        <a class="nav-item" onclick="openPage('todo-seo')" data-page="todo-seo">
+          <span class="nav-item-icon">🌐</span> SEO-инструменты
+        </a>
+        <a class="nav-item" onclick="openPage('todo-reports')" data-page="todo-reports">
+          <span class="nav-item-icon">📊</span> Отчёты
+        </a>
+        <a class="nav-item" onclick="openPage('todo-auth')" data-page="todo-auth">
+          <span class="nav-item-icon">🔒</span> Авторизация
+        </a>
+      </div>
+    </div>
+
+  </div><!-- /sidebar-nav -->
+</nav>
+
+<!-- ── MAIN AREA ── -->
+<div id="main">
+
+  <div class="topbar">
+    <span class="topbar-title" id="page-title">Выберите раздел</span>
+    <span class="topbar-badge" id="page-badge"></span>
+  </div>
+
+  <div class="content">
+
+    <!-- Default / welcome -->
+    <div class="page active" id="page-home">
+      <div class="empty-state">
+        <div class="es-icon">🤖</div>
+        <h3>Добро пожаловать</h3>
+        <p>Выберите раздел в меню слева для начала работы</p>
+      </div>
+    </div>
+
+    <!-- ГОТОВО pages -->
+    <div class="page" id="page-done-chat">
+      <div class="card"><h3>💬 Чат с Claude</h3><p>Интерфейс чата с ИИ — полностью готов и работает.</p></div>
+    </div>
+    <div class="page" id="page-done-parser">
+      <div class="card"><h3>🔍 Парсер сайтов</h3><p>Парсинг и обработка страниц — готово.</p></div>
+    </div>
+    <div class="page" id="page-done-video">
+      <div class="card"><h3>🎬 Генерация видео</h3><p>Модуль генерации видео через KIE API — готово.</p></div>
+    </div>
+
+    <!-- В РАБОТЕ pages -->
+    <div class="page" id="page-wip-logs">
+      <div class="card"><h3>📋 Логи задач</h3><p>Таблица логов с фильтрами — в разработке.</p></div>
+    </div>
+    <div class="page" id="page-wip-api">
+      <div class="card"><h3>🔑 Настройки API</h3><p>Управление API-ключами — в разработке.</p></div>
+    </div>
+
+    <!-- НЕ ГОТОВО pages -->
+    <div class="page" id="page-todo-seo">
+      <div class="empty-state">
+        <div class="es-icon">🌐</div>
+        <h3>SEO-инструменты</h3>
+        <p>В планах разработки</p>
+      </div>
+    </div>
+    <div class="page" id="page-todo-reports">
+      <div class="empty-state">
+        <div class="es-icon">📊</div>
+        <h3>Отчёты</h3>
+        <p>В планах разработки</p>
+      </div>
+    </div>
+    <div class="page" id="page-todo-auth">
+      <div class="empty-state">
+        <div class="es-icon">🔒</div>
+        <h3>Авторизация</h3>
+        <p>В планах разработки</p>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /main -->
+
+<script>
+const pageMeta = {
+  'done-chat':    { title: 'Чат с Claude',      badge: 'badge-done', label: 'Готово'    },
+  'done-parser':  { title: 'Парсер сайтов',     badge: 'badge-done', label: 'Готово'    },
+  'done-video':   { title: 'Генерация видео',   badge: 'badge-done', label: 'Готово'    },
+  'wip-logs':     { title: 'Логи задач',         badge: 'badge-wip',  label: 'В работе'  },
+  'wip-api':      { title: 'Настройки API',      badge: 'badge-wip',  label: 'В работе'  },
+  'todo-seo':     { title: 'SEO-инструменты',   badge: 'badge-todo', label: 'Не готово' },
+  'todo-reports': { title: 'Отчёты',             badge: 'badge-todo', label: 'Не готово' },
+  'todo-auth':    { title: 'Авторизация',        badge: 'badge-todo', label: 'Не готово' },
+};
+
+function openPage(id) {
+  // hide all pages
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-' + id)?.classList.add('active');
+
+  // update nav active state
+  document.querySelectorAll('.nav-item').forEach(el => {
+    el.classList.toggle('active', el.dataset.page === id);
+  });
+
+  // update topbar
+  const meta = pageMeta[id] || {};
+  document.getElementById('page-title').textContent = meta.title || 'Ассистент';
+  const badge = document.getElementById('page-badge');
+  badge.textContent = meta.label || '';
+  badge.className = 'topbar-badge ' + (meta.badge || '');
+}
+
+function toggleBlock(id) {
+  document.getElementById(id).classList.toggle('collapsed');
+}
+
+// Count items per block
+function updateCounts() {
+  ['done','wip','todo'].forEach(type => {
+    const count = document.querySelectorAll(`#items-${type} .nav-item`).length;
+    document.getElementById(`count-${type}`).textContent = count;
+  });
+}
+
+updateCounts();
+
+// ═══════ Drag & Drop nav items between blocks ═══════
+(function() {
+  const STORAGE_KEY = 'nav_positions';
+  let dragEl = null, placeholder = null, sourceList = null;
+
+  function getBlockType(el) {
+    const b = el.closest('.nav-block');
+    if (!b) return 'done';
+    if (b.classList.contains('block-done')) return 'done';
+    if (b.classList.contains('block-wip'))  return 'wip';
+    return 'todo';
+  }
+
+  function savePosToStorage() {
+    const data = {};
+    ['done','wip','todo'].forEach(type => {
+      const list = document.getElementById('items-' + type);
+      data[type] = Array.from(list.querySelectorAll('.nav-item')).map(el => ({
+        page: el.dataset.page,
+        icon: el.querySelector('.nav-item-icon')?.textContent || '',
+        label: el.textContent.trim().replace(/^[\s\S]{1,4}/, '').trim()
+      }));
+    });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  }
+
+  function loadPositions() {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    try {
+      const data = JSON.parse(raw);
+      // Collect all existing nav-items by data-page
+      const allItems = {};
+      document.querySelectorAll('.nav-item[data-page]').forEach(el => {
+        allItems[el.dataset.page] = el;
+      });
+      ['done','wip','todo'].forEach(type => {
+        const list = document.getElementById('items-' + type);
+        if (!data[type]) return;
+        data[type].forEach(entry => {
+          const el = allItems[entry.page];
+          if (el) list.appendChild(el);
+        });
+      });
+      updateCounts();
+    } catch(e) {}
+  }
+
+  function initDrag(el) {
+    el.draggable = true;
+    el.addEventListener('dragstart', e => {
+      dragEl = el;
+      sourceList = el.parentNode;
+      placeholder = document.createElement('div');
+      placeholder.className = 'nav-item drag-placeholder';
+      setTimeout(() => el.classList.add('dragging'), 0);
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    el.addEventListener('dragend', () => {
+      el.classList.remove('dragging');
+      placeholder?.remove();
+      document.querySelectorAll('.drag-over-block').forEach(b => b.classList.remove('drag-over-block'));
+      dragEl = null; placeholder = null;
+      updateCounts();
+      savePosToStorage();
+    });
+  }
+
+  function initList(list) {
+    list.addEventListener('dragover', e => {
+      e.preventDefault();
+      if (!dragEl) return;
+      const block = list.closest('.nav-block');
+      document.querySelectorAll('.drag-over-block').forEach(b => b.classList.remove('drag-over-block'));
+      block?.classList.add('drag-over-block');
+      const after = getDragAfterElement(list, e.clientY);
+      if (after == null) list.appendChild(placeholder);
+      else list.insertBefore(placeholder, after);
+    });
+    list.addEventListener('drop', e => {
+      e.preventDefault();
+      if (!dragEl || !placeholder) return;
+      list.insertBefore(dragEl, placeholder);
+      placeholder.remove();
+    });
+  }
+
+  function getDragAfterElement(container, y) {
+    const els = Array.from(container.querySelectorAll('.nav-item:not(.dragging):not(.drag-placeholder)'));
+    return els.reduce((closest, child) => {
+      const box = child.getBoundingClientRect();
+      const offset = y - box.top - box.height / 2;
+      if (offset < 0 && offset > closest.offset) return { offset, element: child };
+      return closest;
+    }, { offset: -Infinity }).element;
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('.nav-item').forEach(initDrag);
+    document.querySelectorAll('.nav-block-items').forEach(initList);
+    loadPositions();
+  });
+
+  // Expose for dynamic items
+  window.initNavDrag = function(el) { initDrag(el); };
+})();
+
+// ═══════ API Settings Modal ═══════
+function openApiSettings() {
+  document.getElementById('modal-api-settings').style.display = 'flex';
+  document.getElementById('api-settings-msg').style.display = 'none';
+  const oai = localStorage.getItem('openai_api_key');
+  const orr = localStorage.getItem('openrouter_api_key');
+  const kie = localStorage.getItem('kie_api_key');
+  if (oai) document.getElementById('api-key-openai').placeholder = oai.slice(0,8) + '••••••••';
+  if (orr) document.getElementById('api-key-openrouter').placeholder = orr.slice(0,10) + '••••••••';
+  if (kie) document.getElementById('api-key-kie').placeholder = kie.slice(0,8) + '••••••••';
+}
+function closeApiSettings() {
+  document.getElementById('modal-api-settings').style.display = 'none';
+  ['api-key-openai','api-key-openrouter','api-key-kie'].forEach(id => {
+    const el = document.getElementById(id);
+    el.value = '';
+    el.type = 'password';
+  });
+}
+function toggleApiKeyVisibility(inputId) {
+  const inp = document.getElementById(inputId);
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+}
+function saveApiSettings() {
+  const openaiKey = document.getElementById('api-key-openai').value.trim();
+  const openrouterKey = document.getElementById('api-key-openrouter').value.trim();
+  const kieKey = document.getElementById('api-key-kie').value.trim();
+  const msg = document.getElementById('api-settings-msg');
+
+  if (!openaiKey && !openrouterKey && !kieKey) {
+    msg.style.display = 'block';
+    msg.style.background = 'rgba(239,68,68,0.1)';
+    msg.style.border = '1px solid rgba(239,68,68,0.3)';
+    msg.style.color = '#ef4444';
+    msg.textContent = '⚠️ Введите хотя бы один ключ';
+    return;
+  }
+  const saved = [];
+  if (openaiKey) { localStorage.setItem('openai_api_key', openaiKey); saved.push('ChatGPT'); }
+  if (openrouterKey) { localStorage.setItem('openrouter_api_key', openrouterKey); saved.push('OpenRouter'); }
+  if (kieKey) { localStorage.setItem('kie_api_key', kieKey); saved.push('KIE.ai'); }
+
+  msg.style.display = 'block';
+  msg.style.background = 'rgba(34,197,94,0.1)';
+  msg.style.border = '1px solid rgba(34,197,94,0.3)';
+  msg.style.color = '#22c55e';
+  msg.textContent = '✅ Сохранено: ' + saved.join(', ');
+  setTimeout(closeApiSettings, 1500);
+}
+</script>
+
+<!-- ═══════ API Settings Modal ═══════ -->
+<div id="modal-api-settings" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;display:none;align-items:center;justify-content:center;" onclick="if(event.target===this)closeApiSettings()">
+  <div style="background:#1e2130;border:1px solid #2a2d3e;border-radius:12px;width:100%;max-width:460px;box-shadow:0 20px 60px rgba(0,0,0,0.5);overflow:hidden;">
+    <div style="padding:18px 20px 14px;border-bottom:1px solid #2a2d3e;display:flex;align-items:center;justify-content:space-between;">
+      <h3 style="font-size:15px;font-weight:700;color:#e2e8f0;margin:0;">⚙️ Настройки API ключей</h3>
+      <button onclick="closeApiSettings()" style="background:none;border:none;cursor:pointer;color:#8892a4;font-size:18px;line-height:1;padding:2px 6px;border-radius:4px;" onmouseover="this.style.color='#e2e8f0'" onmouseout="this.style.color='#8892a4'">✕</button>
+    </div>
+    <div style="padding:20px;display:flex;flex-direction:column;gap:18px;">
+
+      <!-- ChatGPT -->
+      <div>
+        <label style="font-size:11px;font-weight:700;color:#8892a4;text-transform:uppercase;letter-spacing:0.07em;display:block;margin-bottom:7px;">🤖 ChatGPT (OpenAI)</label>
+        <div style="display:flex;gap:8px;">
+          <input id="api-key-openai" type="password" placeholder="sk-..." style="flex:1;background:#252840;border:1px solid #2a2d3e;border-radius:6px;color:#e2e8f0;padding:10px 12px;font-size:13px;font-family:monospace;outline:none;" onfocus="this.style.borderColor='#6c63ff'" onblur="this.style.borderColor='#2a2d3e'">
+          <button onclick="toggleApiKeyVisibility('api-key-openai')" style="background:#252840;border:1px solid #2a2d3e;border-radius:6px;padding:8px 11px;cursor:pointer;color:#8892a4;font-size:14px;" title="Показать/скрыть">👁</button>
+        </div>
+        <div style="font-size:11px;color:#8892a4;margin-top:5px;">💡 <a href="https://platform.openai.com/api-keys" target="_blank" style="color:#6c63ff;text-decoration:none;">platform.openai.com/api-keys</a></div>
+      </div>
+
+      <!-- OpenRouter -->
+      <div>
+        <label style="font-size:11px;font-weight:700;color:#8892a4;text-transform:uppercase;letter-spacing:0.07em;display:block;margin-bottom:7px;">🔀 OpenRouter</label>
+        <div style="display:flex;gap:8px;">
+          <input id="api-key-openrouter" type="password" placeholder="sk-or-..." style="flex:1;background:#252840;border:1px solid #2a2d3e;border-radius:6px;color:#e2e8f0;padding:10px 12px;font-size:13px;font-family:monospace;outline:none;" onfocus="this.style.borderColor='#6c63ff'" onblur="this.style.borderColor='#2a2d3e'">
+          <button onclick="toggleApiKeyVisibility('api-key-openrouter')" style="background:#252840;border:1px solid #2a2d3e;border-radius:6px;padding:8px 11px;cursor:pointer;color:#8892a4;font-size:14px;" title="Показать/скрыть">👁</button>
+        </div>
+        <div style="font-size:11px;color:#8892a4;margin-top:5px;">💡 <a href="https://openrouter.ai/keys" target="_blank" style="color:#6c63ff;text-decoration:none;">openrouter.ai/keys</a></div>
+      </div>
+
+      <!-- KIE.ai -->
+      <div>
+        <label style="font-size:11px;font-weight:700;color:#8892a4;text-transform:uppercase;letter-spacing:0.07em;display:block;margin-bottom:7px;">🎬 KIE.ai</label>
+        <div style="display:flex;gap:8px;">
+          <input id="api-key-kie" type="password" placeholder="Ваш KIE_AI_API_KEY" style="flex:1;background:#252840;border:1px solid #2a2d3e;border-radius:6px;color:#e2e8f0;padding:10px 12px;font-size:13px;font-family:monospace;outline:none;" onfocus="this.style.borderColor='#6c63ff'" onblur="this.style.borderColor='#2a2d3e'">
+          <button onclick="toggleApiKeyVisibility('api-key-kie')" style="background:#252840;border:1px solid #2a2d3e;border-radius:6px;padding:8px 11px;cursor:pointer;color:#8892a4;font-size:14px;" title="Показать/скрыть">👁</button>
+        </div>
+        <div style="font-size:11px;color:#8892a4;margin-top:5px;">💡 <a href="https://kie.ai/api-key" target="_blank" style="color:#6c63ff;text-decoration:none;">kie.ai/api-key</a></div>
+      </div>
+
+      <div id="api-settings-msg" style="display:none;padding:10px 12px;border-radius:6px;font-size:12px;font-weight:600;"></div>
+
+      <div style="display:flex;gap:8px;padding-top:4px;">
+        <button onclick="saveApiSettings()" style="flex:1;background:#6c63ff;color:#fff;border:none;border-radius:6px;padding:11px;font-weight:700;cursor:pointer;font-size:13px;transition:background 0.15s;" onmouseover="this.style.background='#7d75ff'" onmouseout="this.style.background='#6c63ff'">💾 Сохранить</button>
+        <button onclick="closeApiSettings()" style="padding:11px 18px;background:#252840;color:#e2e8f0;border:1px solid #2a2d3e;border-radius:6px;font-weight:600;cursor:pointer;font-size:13px;">Отмена</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

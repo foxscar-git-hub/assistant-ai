@@ -1,0 +1,454 @@
+{
+  "_meta": {
+    "version": "1.0",
+    "description": "Карта кода проекта. Каждый ключ — фича/раздел UI. Поиск: node scripts/find-code.js <query>",
+    "files": {
+      "html_ui": "public/index.html",
+      "server": "server.js",
+      "services_dir": "services/"
+    }
+  },
+
+  "features": {
+
+    "видео генерация": {
+      "aliases": ["меню видео", "video", "видео", "kie видео", "videogen", "генерация видео", "vg"],
+      "description": "Playground генерации видео через KIE.ai (Seedance модель)",
+      "html_ui": {
+        "file": "public/index.html",
+        "sections": [
+          { "what": "KIE API Settings Modal (HTML)",        "line": 2110 },
+          { "what": "videogen-panel (основной блок UI)",    "line": 2139 },
+          { "what": "Кнопка запуска vg-run-btn",           "line": 2247 },
+          { "what": "CSS: Video Generation блок",          "line": 340  }
+        ]
+      },
+      "js_functions": {
+        "file": "public/index.html",
+        "functions": [
+          { "name": "openVgSettings()",       "line": 15096, "what": "Открыть модал настроек KIE API" },
+          { "name": "closeVgSettings()",      "line": 15103, "what": "Закрыть модал" },
+          { "name": "toggleVgKeyVisibility()","line": 15104, "what": "Показать/скрыть API ключ" },
+          { "name": "checkVgKey()",           "line": 15108, "what": "Проверить валидность KIE ключа" },
+          { "name": "saveVgKey()",            "line": 15137, "what": "Сохранить KIE ключ" },
+          { "name": "enhanceVgPrompt()",      "line": 15162, "what": "Улучшить промпт через Claude" },
+          { "name": "loadKieBalance()",       "line": 15191, "what": "Загрузить баланс KIE" },
+          { "name": "switchVgTab(tab)",       "line": 15202, "what": "Переключить таб (генерация/логи)" },
+          { "name": "loadVgLogs()",           "line": 15216, "what": "Загрузить логи видео задач" },
+          { "name": "renderVgLogs()",         "line": 15225, "what": "Отрисовать таблицу логов" },
+          { "name": "showVgParams(btn,json)", "line": 15293, "what": "Попап параметров задачи" },
+          { "name": "recheckVgTask(taskId)",  "line": 15306, "what": "Перепроверить статус задачи" },
+          { "name": "repeatVgLog(...)",       "line": 15331, "what": "Повторить генерацию из лога" },
+          { "name": "saveVgLog(entry)",       "line": 15340, "what": "Сохранить запись в лог" },
+          { "name": "setVgQuality(q)",        "line": 15347, "what": "Установить качество/разрешение" },
+          { "name": "runVideoGen()",          "line": 15379, "what": "Главная функция запуска генерации" }
+        ]
+      },
+      "sidebar_trigger": {
+        "file": "public/index.html",
+        "lines": [4259, 6497],
+        "what": "switchSidebar → показ videogen-panel"
+      },
+      "server_routes": {
+        "file": "server.js",
+        "routes": [
+          { "method": "POST", "path": "/api/kie/video/generate",  "line": 3842, "what": "Запуск генерации видео" },
+          { "method": "GET",  "path": "/api/kie/task/:taskId",    "line": 3852, "what": "Статус задачи KIE" },
+          { "method": "GET",  "path": "/api/kie/status",          "line": 3860, "what": "Баланс / статус KIE аккаунта" },
+          { "method": "POST", "path": "/api/kie/music/generate",  "line": 3814, "what": "Генерация музыки KIE" },
+          { "method": "GET",  "path": "/api/kie/music/:taskId",   "line": 3824, "what": "Статус задачи музыки" },
+          { "method": "POST", "path": "/api/kie/image/generate",  "line": 3832, "what": "Генерация изображений KIE" },
+          { "method": "GET",  "path": "/api/videogen/logs",       "line": 6403, "what": "Получить логи видеогенерации" },
+          { "method": "POST", "path": "/api/videogen/logs",       "line": 6407, "what": "Добавить запись в лог" },
+          { "method": "POST", "path": "/api/videogen/logs/update","line": 6432, "what": "Обновить статус в логе" },
+          { "method": "DELETE","path": "/api/videogen/logs/:taskId","line": 6447,"what": "Удалить запись лога" }
+        ]
+      },
+      "data_file": "data/videogen-logs.json",
+      "server_const": { "file": "server.js", "line": 6399, "what": "VG_LOGS_FILE путь к файлу логов" }
+    },
+
+    "парсер": {
+      "aliases": ["парсер сайтов", "parser", "парсинг", "parse", "парсер участников"],
+      "description": "Парсер сайтов и Telegram участников",
+      "html_ui": {
+        "file": "public/index.html",
+        "sections": [
+          { "what": "CSS: Parser блок",                   "line": 340  },
+          { "what": "parser-list-panel (левая панель)",   "line": 1029 }
+        ]
+      },
+      "js_functions": {
+        "file": "public/index.html",
+        "functions": [
+          { "name": "openParserForm()",        "line": 13406, "what": "Открыть форму нового парсинга" },
+          { "name": "startParsing()",          "line": 13430, "what": "Запустить задачу парсинга" },
+          { "name": "startParserPoll()",       "line": 13465, "what": "Начать поллинг статуса" },
+          { "name": "pollParserStatus()",      "line": 13470, "what": "Проверить статус задачи" },
+          { "name": "loadParserResults(jobId)","line": 13518, "what": "Загрузить результаты" },
+          { "name": "renderParserTable()",     "line": 13529, "what": "Отрисовать таблицу результатов" },
+          { "name": "updateParserToolbar()",   "line": 13591, "what": "Обновить тулбар (фильтры/экспорт)" },
+          { "name": "exportParserCSV()",       "line": 13656, "what": "Экспорт в CSV" },
+          { "name": "exportParserXLSX()",      "line": 13661, "what": "Экспорт в XLSX" },
+          { "name": "loadParserJobs()",        "line": 13678, "what": "Загрузить список задач" },
+          { "name": "deleteParserJob(jobId)",  "line": 13714, "what": "Удалить задачу" },
+          { "name": "parseChatMembers()",      "line": 14005, "what": "Парсить участников Telegram чата" }
+        ]
+      },
+      "server_routes": {
+        "file": "server.js",
+        "routes": [
+          { "method": "GET",  "path": "/api/parse/methods",       "line": 5794, "what": "Доступные методы парсинга" },
+          { "method": "POST", "path": "/api/parse/start",         "line": 5800, "what": "Запустить задачу" },
+          { "method": "GET",  "path": "/api/parse/status/:jobId", "line": 5838, "what": "Статус задачи" },
+          { "method": "GET",  "path": "/api/parse/results/:jobId","line": 5845, "what": "Результаты задачи" },
+          { "method": "GET",  "path": "/api/parse/export-csv/:jobId","line": 5852,"what": "Экспорт CSV" },
+          { "method": "GET",  "path": "/api/parse/export-xlsx/:jobId","line": 5870,"what": "Экспорт XLSX" },
+          { "method": "GET",  "path": "/api/parse/jobs",          "line": 5910, "what": "Список всех задач" },
+          { "method": "DELETE","path": "/api/parse/jobs/:jobId",  "line": 5920, "what": "Удалить задачу" }
+        ]
+      },
+      "service_file": "services/parser-service.js"
+    },
+
+    "чат": {
+      "aliases": ["чаты", "chat", "монитор чатов", "telegram чат", "tg chat", "мониторинг"],
+      "description": "Мониторинг и управление Telegram чатами",
+      "html_ui": {
+        "file": "public/index.html",
+        "sections": [
+          { "what": "chat-list-panel (список чатов)",       "line": 1016 },
+          { "what": "chat-panel (панель чата)",             "line": 1135 }
+        ]
+      },
+      "js_functions": {
+        "file": "public/index.html",
+        "functions": [
+          { "name": "loadChatList()",           "line": 4667 },
+          { "name": "renderChatList()",         "line": 4810 },
+          { "name": "selectChat(chatId)",       "line": 5001 },
+          { "name": "loadChatMessages()",       "line": 5032 },
+          { "name": "sendTestMessage()",        "line": 5628 },
+          { "name": "toggleAutoReply()",        "line": 5404 },
+          { "name": "startSimulation()",        "line": 5324 },
+          { "name": "openAddChat()",            "line": 5775 },
+          { "name": "addChat()",                "line": 5819 },
+          { "name": "removeChat()",             "line": 5875 }
+        ]
+      },
+      "server_routes": {
+        "file": "server.js",
+        "routes": [
+          { "method": "GET",  "path": "/api/chats",                    "line": 1003 },
+          { "method": "POST", "path": "/api/chats",                    "line": 1084 },
+          { "method": "GET",  "path": "/api/chats/:chatId/messages",   "line": 2129 },
+          { "method": "POST", "path": "/api/chats/:chatId/send-message","line": 2274 },
+          { "method": "POST", "path": "/api/chats/:chatId/simulate",   "line": 1230 },
+          { "method": "DELETE","path": "/api/chats/:chatId",           "line": 1333 }
+        ]
+      },
+      "service_file": "services/chats.js"
+    },
+
+    "агенты": {
+      "aliases": ["agent", "агент", "база знаний", "kb", "агент панель"],
+      "description": "Управление AI-агентами и базой знаний",
+      "html_ui": {
+        "file": "public/index.html",
+        "sections": [
+          { "what": "agent-panel (основной блок)",  "line": 1047 },
+          { "what": "tab-kb (база знаний)",         "line": 1063 },
+          { "what": "tab-chat (чат с агентом)",     "line": 1075 },
+          { "what": "tab-settings (настройки)",     "line": 1090 }
+        ]
+      },
+      "js_functions": {
+        "file": "public/index.html",
+        "functions": [
+          { "name": "loadAgents()",         "line": 4464 },
+          { "name": "selectAgent()",        "line": 4609 },
+          { "name": "loadAgentKB()",        "line": 4621 },
+          { "name": "createAgent()",        "line": 5920 },
+          { "name": "deleteAgentConfirm()","line": 5931 }
+        ]
+      },
+      "server_routes": {
+        "file": "server.js",
+        "routes": [
+          { "method": "GET",    "path": "/api/agents",                    "line": 380 },
+          { "method": "POST",   "path": "/api/agents",                    "line": 388 },
+          { "method": "DELETE", "path": "/api/agents/:agentId",           "line": 397 },
+          { "method": "GET",    "path": "/api/agents/:agentId/kb",        "line": 404 },
+          { "method": "POST",   "path": "/api/agents/:agentId/chat",      "line": 841 },
+          { "method": "POST",   "path": "/api/agents/:agentId/entries",   "line": 416 }
+        ]
+      },
+      "service_file": "services/claude.js"
+    },
+
+    "сторис": {
+      "aliases": ["stories", "сторис", "контент сторис", "smm сторис"],
+      "description": "Генерация и публикация Stories",
+      "js_functions": {
+        "file": "public/index.html",
+        "functions": [
+          { "name": "loadClientStories()",    "line": 10132 },
+          { "name": "generateStories()",      "line": 10363 },
+          { "name": "openStoriesSettings()",  "line": 10425 },
+          { "name": "publishStoriesToTelegram()", "line": 10576 }
+        ]
+      },
+      "server_routes": {
+        "file": "server.js",
+        "routes": [
+          { "method": "GET",  "path": "/api/stories",           "line": 4366 },
+          { "method": "POST", "path": "/api/stories",           "line": 4375 },
+          { "method": "POST", "path": "/api/stories/:id/generate","line": 4522 },
+          { "method": "POST", "path": "/api/stories/:id/publish", "line": 4434 }
+        ]
+      },
+      "service_files": ["services/smm-generator.js", "services/smm-orchestrator.js"]
+    },
+
+    "активы": {
+      "aliases": ["assets", "активы", "портфель", "имущество", "недвижимость"],
+      "description": "Учёт финансовых активов и имущества",
+      "js_functions": {
+        "file": "public/index.html",
+        "functions": [
+          { "name": "loadAssets()",        "line": 10657 },
+          { "name": "renderAssetsTable()", "line": 10669 },
+          { "name": "openAddAsset()",      "line": 10746 },
+          { "name": "saveAssetModal()",    "line": 10808 },
+          { "name": "analyzeAsset()",      "line": 10834 },
+          { "name": "switchAssetsTab()",   "line": 10869 }
+        ]
+      },
+      "server_routes": {
+        "file": "server.js",
+        "routes": [
+          { "method": "GET",    "path": "/api/assets",        "line": 5444 },
+          { "method": "POST",   "path": "/api/assets",        "line": 5451 },
+          { "method": "PUT",    "path": "/api/assets/:id",    "line": 5473 },
+          { "method": "DELETE", "path": "/api/assets/:id",    "line": 5491 },
+          { "method": "POST",   "path": "/api/assets/:id/analyze","line": 5498 }
+        ]
+      }
+    },
+
+    "счета": {
+      "aliases": ["счета", "accounts", "аккаунты", "банк", "банковские счета"],
+      "description": "Финансовые счета и их типы",
+      "html_ui": {
+        "file": "public/index.html",
+        "sections": [
+          { "what": "CSS: Accounts блок", "line": 298 }
+        ]
+      },
+      "js_functions": {
+        "file": "public/index.html",
+        "functions": [
+          { "name": "loadAccounts()",            "line": 10902 },
+          { "name": "renderAccountsTable()",     "line": 10912 },
+          { "name": "openAddAccount()",          "line": 11053 },
+          { "name": "saveAccountModal()",        "line": 11075 },
+          { "name": "openAccountTypes()",        "line": 11102 }
+        ]
+      },
+      "server_routes": {
+        "file": "server.js",
+        "routes": [
+          { "method": "GET",    "path": "/api/accounts",          "line": 5615 },
+          { "method": "POST",   "path": "/api/accounts",          "line": 5622 },
+          { "method": "PUT",    "path": "/api/accounts/:id",      "line": 5642 },
+          { "method": "DELETE", "path": "/api/accounts/:id",      "line": 5658 },
+          { "method": "GET",    "path": "/api/account-types",     "line": 5585 },
+          { "method": "POST",   "path": "/api/account-types",     "line": 5587 }
+        ]
+      }
+    },
+
+    "финансы": {
+      "aliases": ["finance", "финансы", "финансовые клиенты", "отчёт финансы", "bybit"],
+      "description": "Финансовые клиенты, отчёты, Bybit",
+      "js_functions": {
+        "file": "public/index.html",
+        "functions": [
+          { "name": "selectAllFinanceClients()", "line": 6511 },
+          { "name": "renderAllFinanceSummary()", "line": 6595 }
+        ]
+      },
+      "server_routes": {
+        "file": "server.js",
+        "routes": [
+          { "method": "GET",  "path": "/api/finance-clients",     "line": 4636 },
+          { "method": "GET",  "path": "/api/finance-report",      "line": 4652 },
+          { "method": "POST", "path": "/api/finance-clients",     "line": 4890 },
+          { "method": "GET",  "path": "/api/bybit/balance",       "line": 6238 },
+          { "method": "GET",  "path": "/api/bybit/positions",     "line": 6248 },
+          { "method": "POST", "path": "/api/bybit/set-credentials","line": 6259 }
+        ]
+      },
+      "service_file": "services/bybit.js"
+    },
+
+    "курсы": {
+      "aliases": ["courses", "курс", "уроки", "обучение"],
+      "description": "Управление курсами и уроками",
+      "js_functions": {
+        "file": "public/index.html",
+        "functions": [
+          { "name": "loadCoursesList()",  "line": 11657 },
+          { "name": "showCoursesPanel()", "line": 11682 }
+        ]
+      },
+      "server_routes": {
+        "file": "server.js",
+        "routes": [
+          { "method": "GET",    "path": "/api/courses",                    "line": 4795 },
+          { "method": "POST",   "path": "/api/courses",                    "line": 4802 },
+          { "method": "PUT",    "path": "/api/courses/:id",                "line": 4813 },
+          { "method": "DELETE", "path": "/api/courses/:id",                "line": 4841 },
+          { "method": "POST",   "path": "/api/courses/:id/lessons",        "line": 4850 },
+          { "method": "DELETE", "path": "/api/courses/:id/lessons/:lessonId","line": 4880 }
+        ]
+      }
+    },
+
+    "дзен": {
+      "aliases": ["dzen", "дзен", "яндекс дзен", "zen", "статьи", "дзен статистика"],
+      "description": "Публикации и статистика Яндекс Дзен",
+      "js_functions": {
+        "file": "public/index.html",
+        "functions": [
+          { "name": "openDzenStats(url)",         "line": 7827 },
+          { "name": "saveDzenCookieAndLoad()",    "line": 7843 },
+          { "name": "refreshDzenStats()",         "line": 7851 },
+          { "name": "loadDzenStats(url)",         "line": 7856 },
+          { "name": "renderDzenDashboard()",      "line": 7881 },
+          { "name": "loadDzenArticles()",         "line": 9972 },
+          { "name": "generateDzenArticle()",      "line": 10018 }
+        ]
+      },
+      "server_routes": {
+        "file": "server.js",
+        "routes": [
+          { "method": "GET",  "path": "/api/dzen-cookies",  "line": 3102 },
+          { "method": "POST", "path": "/api/dzen-cookies",  "line": 3103 },
+          { "method": "GET",  "path": "/api/stats/dzen",    "line": 3121 }
+        ]
+      }
+    },
+
+    "smm": {
+      "aliases": ["smm", "контент", "публикации", "соцсети", "smm посты"],
+      "description": "SMM генерация и публикация контента",
+      "server_routes": {
+        "file": "server.js",
+        "routes": [
+          { "method": "POST", "path": "/api/smm/generate",           "line": 6162 },
+          { "method": "POST", "path": "/api/smm/publish",            "line": 6174 },
+          { "method": "POST", "path": "/api/smm/jobs",               "line": 6186 },
+          { "method": "GET",  "path": "/api/smm/jobs",               "line": 6198 },
+          { "method": "GET",  "path": "/api/smm/history",            "line": 6209 },
+          { "method": "GET",  "path": "/api/smm/platforms",          "line": 6231 }
+        ]
+      },
+      "service_files": ["services/smm-generator.js", "services/smm-platforms.js", "services/smm-orchestrator.js"]
+    },
+
+    "клиенты": {
+      "aliases": ["clients", "клиент", "кз", "КЗ", "карточка клиента"],
+      "description": "Список и карточки клиентов (КЗ)",
+      "html_ui": {
+        "file": "public/index.html",
+        "sections": [
+          { "what": "panel-clients-list (список клиентов)", "line": 1200 },
+          { "what": "panel-client (карточка клиента)",      "line": 1212 }
+        ]
+      },
+      "js_functions": {
+        "file": "public/index.html",
+        "functions": [
+          { "name": "loadClientList()", "line": 8029 },
+          { "name": "_kzClientHTML()",  "line": 8009 }
+        ]
+      }
+    },
+
+    "дашборд": {
+      "aliases": ["dashboard", "дашборд", "главная", "сводка"],
+      "description": "Сводный дашборд с метриками",
+      "js_functions": {
+        "file": "public/index.html",
+        "functions": [
+          { "name": "renderSidebarDashboard()", "line": 4328 },
+          { "name": "renderMainDashboard()",    "line": 4409 }
+        ]
+      }
+    },
+
+    "сайдбар": {
+      "aliases": ["sidebar", "сайдбар", "меню", "навигация", "боковое меню"],
+      "description": "Левое боковое меню и навигация",
+      "html_ui": {
+        "file": "public/index.html",
+        "sections": [
+          { "what": "CSS: Sidebar стили",  "line": 31 },
+          { "what": "HTML: Sidebar блок",  "line": 856 },
+          { "what": "Кнопки-switcher",     "line": 868 }
+        ]
+      },
+      "js_functions": {
+        "file": "public/index.html",
+        "functions": [
+          { "name": "switchSidebar(tab)",  "line": 4184 },
+          { "name": "switchProjTab(tab)",  "line": 4292 },
+          { "name": "loadSnavGroups()",    "line": 3993 },
+          { "name": "renderSnavMenu()",    "line": 4017 }
+        ]
+      }
+    },
+
+    "модалки": {
+      "aliases": ["modal", "модал", "модалки", "popup", "попап"],
+      "description": "Система модальных окон",
+      "html_ui": {
+        "file": "public/index.html",
+        "sections": [
+          { "what": "CSS: Modals стили",  "line": 594 },
+          { "what": "HTML: Modals блок",  "line": 2412 }
+        ]
+      },
+      "js_functions": {
+        "file": "public/index.html",
+        "functions": [
+          { "name": "openModal(id)",  "line": 6660 },
+          { "name": "closeModal(id)", "line": 6661 }
+        ]
+      }
+    },
+
+    "tg аккаунт": {
+      "aliases": ["tg-user", "телеграм аккаунт", "аккаунт tg", "диалоги", "telegram account"],
+      "description": "Работа с Telegram пользовательским аккаунтом",
+      "js_functions": {
+        "file": "public/index.html",
+        "functions": [
+          { "name": "tguLoadDialogs()",     "line": 6914 },
+          { "name": "renderTguDialogs()",   "line": 6936 },
+          { "name": "tguLogout()",          "line": 6997 },
+          { "name": "analyzeAccountChats()","line": 7195 }
+        ]
+      },
+      "server_routes": {
+        "file": "server.js",
+        "routes": [
+          { "method": "GET",  "path": "/api/tg-user/dialogs", "line": 977 },
+          { "method": "POST", "path": "/api/tg-user/logout",  "line": 997 }
+        ]
+      },
+      "service_file": "services/tg-user.js"
+    }
+  }
+}

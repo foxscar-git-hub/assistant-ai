@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Новый ассистент",
+      "runtimeExecutable": "/Users/imac27-5k/.nvm/versions/node/v20.20.1/bin/node",
+      "runtimeArgs": ["server.js"],
+      "port": 3000,
+      "cwd": "/Volumes/data/ассистент-new"
+    }
+  ]
+}
