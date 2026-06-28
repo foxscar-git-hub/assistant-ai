@@ -243,6 +243,261 @@
   /* Page sections — each nav item leads to its own view */
   .page { display: none; }
   .page.active { display: block; }
+  /* Video page needs flex full-height */
+  #page-wip-video.active { display: flex; }
+
+  /* ── Video Studio layout ── */
+  .video-studio {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+    height: 100%;
+  }
+
+  /* Projects sidebar */
+  .vproj-panel {
+    width: 220px;
+    min-width: 220px;
+    background: var(--sidebar-bg);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .vproj-header {
+    padding: 14px 14px 10px;
+    border-bottom: 1px solid var(--border);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .vproj-add-btn {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    width: 24px;
+    height: 24px;
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: background 0.15s;
+  }
+  .vproj-add-btn:hover { background: var(--accent-hover, #7d75ff); }
+  .vproj-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+  }
+  .vproj-list::-webkit-scrollbar { width: 4px; }
+  .vproj-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+  .vproj-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 10px;
+    border-radius: 7px;
+    cursor: pointer;
+    transition: background 0.12s;
+    color: var(--text-muted);
+    font-size: 13px;
+    user-select: none;
+  }
+  .vproj-item:hover { background: var(--card-bg); color: var(--text); }
+  .vproj-item.active { background: rgba(108,99,255,0.15); color: var(--accent); font-weight: 600; }
+  .vproj-item-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .vproj-item-name-input {
+    flex: 1;
+    background: var(--input-bg, #252840);
+    border: 1px solid var(--accent);
+    border-radius: 4px;
+    color: var(--text);
+    font-size: 13px;
+    padding: 2px 6px;
+    outline: none;
+    min-width: 0;
+  }
+  .vproj-del-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-muted);
+    font-size: 13px;
+    opacity: 0;
+    padding: 2px 4px;
+    border-radius: 4px;
+    transition: opacity 0.15s, color 0.15s;
+    flex-shrink: 0;
+  }
+  .vproj-item:hover .vproj-del-btn { opacity: 1; }
+  .vproj-del-btn:hover { color: #ef4444; }
+  .vproj-empty {
+    padding: 20px 12px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 12px;
+    line-height: 1.6;
+  }
+
+  /* Video workspace */
+  .vwork-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* Tabs */
+  .vtabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    padding: 0 20px;
+    flex-shrink: 0;
+    gap: 2px;
+  }
+  .vtab-btn {
+    padding: 12px 16px;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-muted);
+    font-size: 13.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+    margin-bottom: -1px;
+    white-space: nowrap;
+  }
+  .vtab-btn:hover { color: var(--text); }
+  .vtab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* Tab panels */
+  .vtab-panel { display: none; flex: 1; overflow-y: auto; padding: 24px; }
+  .vtab-panel.active { display: block; }
+  .vtab-panel::-webkit-scrollbar { width: 6px; }
+  .vtab-panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  /* Video tab panels — override display when active */
+  #vtab-generate { display: none; }
+  #vtab-generate.active { display: flex !important; flex-direction: column; flex: 1; overflow: hidden; padding: 0; }
+  #vtab-generate.active > div { flex: 1; overflow: hidden; }
+  #vtab-logs { display: none; }
+  #vtab-logs.active { display: flex !important; flex-direction: column; flex: 1; overflow: hidden; padding: 0; }
+
+  /* Format picker pills */
+  .vgen-fmt-btn {
+    padding: 5px 10px; border-radius: 6px; border: 1px solid var(--border);
+    background: var(--card-bg); color: var(--text-muted); font-size: 11px;
+    font-weight: 700; cursor: pointer; transition: all 0.15s; user-select: none; white-space: nowrap;
+  }
+  .vgen-fmt-btn:hover { border-color: var(--accent); color: var(--text); }
+  .vgen-fmt-btn.active { background: rgba(108,99,255,0.15); border-color: var(--accent); color: var(--accent); }
+
+  /* Model tabs inside Input panel */
+  .vgen-model-tab {
+    flex: 1; padding: 6px 4px; border: none; background: none; border-radius: 6px;
+    font-size: 12px; font-weight: 700; color: var(--text-muted); cursor: pointer;
+    transition: all 0.15s; white-space: nowrap;
+  }
+  .vgen-model-tab:hover { color: var(--text); }
+  .vgen-model-tab.active { background: var(--card-bg); color: var(--accent); box-shadow: 0 1px 4px rgba(0,0,0,0.3); }
+
+  /* Radio pill buttons */
+  .vgen-ratio-btn {
+    padding: 5px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--card-bg);
+    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    user-select: none;
+    white-space: nowrap;
+  }
+  .vgen-ratio-btn:hover { border-color: var(--accent); color: var(--text); }
+  .vgen-ratio-btn.active { background: rgba(108,99,255,0.18); border-color: var(--accent); color: var(--accent); }
+
+  /* Video output card */
+  .vgen-result-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .vgen-result-card video {
+    width: 100%;
+    display: block;
+    border-radius: 10px 10px 0 0;
+    max-height: 300px;
+    background: #000;
+  }
+  .vgen-result-actions {
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-top: 1px solid var(--border);
+  }
+
+  /* Progress bar */
+  .vgen-progress {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .vgen-progress-bar-wrap { background: var(--border); border-radius: 4px; height: 4px; overflow: hidden; }
+  .vgen-progress-bar { height: 4px; background: var(--accent); border-radius: 4px; transition: width 0.5s; width: 0%; }
+
+  /* KIE Logs table */
+  .kie-logs-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .kie-logs-table th { padding: 9px 12px; text-align: left; font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border); background: var(--card-bg); position: sticky; top: 0; white-space: nowrap; }
+  .kie-logs-table td { padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.04); vertical-align: middle; color: var(--text); }
+  .kie-logs-table tr:hover td { background: rgba(255,255,255,0.025); }
+  .kie-log-status { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 20px; font-size: 11px; font-weight: 700; }
+  .kie-log-status.success { background: rgba(0,201,167,0.15); color: #00c9a7; }
+  .kie-log-status.pending { background: rgba(245,158,11,0.15); color: #f59e0b; }
+  .kie-log-status.fail    { background: rgba(239,68,68,0.15); color: #ef4444; }
+  .kie-log-status.processing { background: rgba(108,99,255,0.15); color: var(--accent); }
+  .kie-log-model-badge { display: inline-block; background: rgba(108,99,255,0.15); color: var(--accent); border-radius: 5px; padding: 2px 8px; font-size: 11px; font-weight: 700; margin-bottom: 3px; }
+  .kie-log-taskid { font-family: monospace; font-size: 11px; color: var(--text-muted); max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+  .kie-log-taskid:hover { color: var(--accent); }
+  .kie-log-thumb { width: 48px; height: 30px; object-fit: cover; border-radius: 4px; background: #000; display: block; }
+  .kie-log-expand-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 12px; padding: 2px 5px; }
+  .kie-log-expand-btn:hover { color: var(--text); }
+
+  /* No-project placeholder */
+  .vwork-placeholder {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 12px;
+    color: var(--text-muted);
+    font-size: 14px;
+  }
+  .vwork-placeholder .vp-icon { font-size: 44px; opacity: 0.3; }
 
   /* Generic card */
   .card {
@@ -274,6 +529,7 @@
   <div class="sidebar-header">
     <div class="logo-icon">🤖</div>
     <span class="logo-title" style="flex:1;">Ассистент</span>
+    <span id="api-health-dot" title="Статус API ключей" style="width:8px;height:8px;border-radius:50%;background:#6b7280;display:inline-block;flex-shrink:0;cursor:pointer;transition:background 0.3s;" onclick="openApiSettings()"></span>
     <button onclick="openApiSettings()" title="Настройки API" style="background:none;border:none;cursor:pointer;font-size:16px;opacity:0.5;padding:4px 6px;border-radius:6px;transition:opacity 0.15s;line-height:1;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.5'">⚙️</button>
   </div>
 
@@ -316,6 +572,9 @@
         </a>
         <a class="nav-item" onclick="openPage('wip-api')" data-page="wip-api">
           <span class="nav-item-icon">🔑</span> Настройки API
+        </a>
+        <a class="nav-item" onclick="openPage('wip-video')" data-page="wip-video">
+          <span class="nav-item-icon">🎬</span> Видео
         </a>
       </div>
     </div>
@@ -383,6 +642,259 @@
     <div class="page" id="page-wip-api">
       <div class="card"><h3>🔑 Настройки API</h3><p>Управление API-ключами — в разработке.</p></div>
     </div>
+    <div class="page" id="page-wip-video">
+      <div class="video-studio">
+
+        <!-- Список проектов -->
+        <div class="vproj-panel">
+          <div class="vproj-header">
+            Проекты
+            <button class="vproj-add-btn" onclick="vprojCreate()" title="Новый проект">+</button>
+          </div>
+          <div class="vproj-list" id="vproj-list">
+            <div class="vproj-empty" id="vproj-empty">Нет проектов.<br>Нажмите + чтобы создать</div>
+          </div>
+        </div>
+
+        <!-- Рабочая область -->
+        <div class="vwork-area" id="vwork-area">
+
+          <!-- Заглушка без проекта -->
+          <div class="vwork-placeholder" id="vwork-placeholder">
+            <div class="vp-icon">🎬</div>
+            <div>Выберите или создайте проект</div>
+          </div>
+
+          <!-- Контент с табами (скрыт пока нет проекта) -->
+          <div id="vwork-content" style="display:none;flex-direction:column;flex:1;overflow:hidden;">
+            <div class="vtabs">
+              <button class="vtab-btn active" onclick="vswitchTab('generate', this)">✨ Генерация видео</button>
+              <button class="vtab-btn" onclick="vswitchTab('edit', this)">✂️ Монтаж видео</button>
+              <button class="vtab-btn" onclick="vswitchTab('logs', this); kieLogsLoad();">📋 Логи KIE</button>
+            </div>
+
+            <!-- Генерация -->
+            <div class="vtab-panel active" id="vtab-generate" style="padding:0;">
+              <div style="display:flex;height:100%;overflow:hidden;">
+
+                <!-- Input колонка -->
+                <div style="width:400px;min-width:340px;border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;">
+
+                  <!-- Шапка: модель-табы -->
+                  <div style="padding:10px 14px 0;border-bottom:1px solid var(--border);">
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+                      <span style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;">Model</span>
+                      <button onclick="vgenReset()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:12px;font-weight:600;padding:2px 6px;" title="Сброс">↺ Reset</button>
+                    </div>
+                    <div style="display:flex;gap:0;background:var(--bg);border-radius:8px;padding:3px;margin-bottom:10px;border:1px solid var(--border);">
+                      <button class="vgen-model-tab active" data-model="seedance" onclick="vgenSelectModel('seedance',this)">🌱 Seedance</button>
+                      <button class="vgen-model-tab" data-model="veo" onclick="vgenSelectModel('veo',this)">🎬 Veo</button>
+                      <button class="vgen-model-tab" data-model="omni" onclick="vgenSelectModel('omni',this)">🌀 Omni</button>
+                    </div>
+                    <!-- Подмодель (для Seedance) -->
+                    <div id="vgen-submodel-row" style="display:flex;gap:6px;padding-bottom:10px;">
+                      <label class="vgen-ratio-btn active" data-val="fast"><input type="radio" name="vgen-qual" value="fast" checked style="display:none;">Lite (fast)</label>
+                      <label class="vgen-ratio-btn" data-val="pro"><input type="radio" name="vgen-qual" value="pro" style="display:none;">Pro</label>
+                    </div>
+                  </div>
+
+                  <div style="flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:14px;">
+
+                    <!-- Формат ролика -->
+                    <div>
+                      <label style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;display:block;margin-bottom:6px;">Формат ролика</label>
+                      <div style="display:flex;gap:5px;flex-wrap:wrap;" id="vgen-format-row">
+                        <label class="vgen-fmt-btn active" data-val="cinematic"><input type="radio" name="vgen-format" value="cinematic" checked style="display:none;">🎬 Кино</label>
+                        <label class="vgen-fmt-btn" data-val="viral"><input type="radio" name="vgen-format" value="viral" style="display:none;">🔥 Вирусный</label>
+                        <label class="vgen-fmt-btn" data-val="cartoon"><input type="radio" name="vgen-format" value="cartoon" style="display:none;">🎨 Мультик</label>
+                        <label class="vgen-fmt-btn" data-val="documentary"><input type="radio" name="vgen-format" value="documentary" style="display:none;">📹 Докумен.</label>
+                        <label class="vgen-fmt-btn" data-val="ad"><input type="radio" name="vgen-format" value="ad" style="display:none;">📣 Реклама</label>
+                      </div>
+                    </div>
+
+                    <!-- Prompt -->
+                    <div>
+                      <label style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;display:flex;align-items:center;gap:6px;margin-bottom:6px;">prompt <span style="color:#ef4444;">*</span></label>
+                      <textarea id="vgen-prompt" placeholder="Опишите видео которое хотите создать..."
+                        style="width:100%;min-height:90px;background:var(--card-bg);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-size:13px;resize:vertical;font-family:inherit;outline:none;line-height:1.5;"
+                        onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"></textarea>
+                      <!-- Кнопка улучшить промт -->
+                      <div style="margin-top:6px;display:flex;align-items:center;gap:8px;">
+                        <button id="vgen-enhance-btn" onclick="vgenEnhancePrompt()" style="background:rgba(108,99,255,0.15);border:1px solid rgba(108,99,255,0.4);border-radius:6px;padding:6px 14px;font-size:12px;font-weight:700;color:var(--accent);cursor:pointer;display:flex;align-items:center;gap:6px;transition:all 0.15s;" onmouseover="this.style.background='rgba(108,99,255,0.25)'" onmouseout="this.style.background='rgba(108,99,255,0.15)'">
+                          ✨ Улучшить промт
+                        </button>
+                        <span id="vgen-enhance-status" style="font-size:11px;color:var(--text-muted);display:none;"></span>
+                      </div>
+                    </div>
+
+                    <!-- First frame image -->
+                    <div>
+                      <label style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+                        <span>first_frame_image</span>
+                        <div style="display:flex;gap:6px;align-items:center;">
+                          <button onclick="vrefPickOpen('first')" style="background:none;border:1px solid var(--border);border-radius:5px;color:var(--text-muted);font-size:11px;cursor:pointer;padding:2px 8px;" title="Выбрать из библиотеки">📁 Библ.</button>
+                          <button onclick="vgenClearImage('first')" style="background:none;border:none;color:#ef4444;font-size:11px;cursor:pointer;display:none;" id="vgen-clear-first">✕</button>
+                        </div>
+                      </label>
+                      <div id="vgen-first-drop" onclick="document.getElementById('vgen-first-input').click()"
+                        style="border:2px dashed var(--border);border-radius:8px;padding:14px;text-align:center;cursor:pointer;transition:border-color 0.15s;min-height:72px;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:5px;"
+                        ondragover="event.preventDefault();this.style.borderColor='var(--accent)'"
+                        ondragleave="this.style.borderColor='var(--border)'"
+                        ondrop="vgenDropImage(event,'first')"
+                        onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+                        <input type="file" id="vgen-first-input" accept="image/*" style="display:none;" onchange="vgenFileImage(event,'first')">
+                        <div id="vgen-first-preview" style="display:none;"><img style="max-height:72px;border-radius:6px;max-width:100%;"></div>
+                        <div id="vgen-first-placeholder" style="color:var(--text-muted);font-size:12px;"><div style="font-size:18px;margin-bottom:3px;">🖼</div>+ First frame</div>
+                      </div>
+                    </div>
+
+                    <!-- Last frame image -->
+                    <div>
+                      <label style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+                        <span>last_frame_image</span>
+                        <div style="display:flex;gap:6px;align-items:center;">
+                          <button onclick="vrefPickOpen('last')" style="background:none;border:1px solid var(--border);border-radius:5px;color:var(--text-muted);font-size:11px;cursor:pointer;padding:2px 8px;">📁 Библ.</button>
+                          <button onclick="vgenClearImage('last')" style="background:none;border:none;color:#ef4444;font-size:11px;cursor:pointer;display:none;" id="vgen-clear-last">✕</button>
+                        </div>
+                      </label>
+                      <div id="vgen-last-drop" onclick="document.getElementById('vgen-last-input').click()"
+                        style="border:2px dashed var(--border);border-radius:8px;padding:14px;text-align:center;cursor:pointer;transition:border-color 0.15s;min-height:72px;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:5px;"
+                        ondragover="event.preventDefault();this.style.borderColor='var(--accent)'"
+                        ondragleave="this.style.borderColor='var(--border)'"
+                        ondrop="vgenDropImage(event,'last')"
+                        onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+                        <input type="file" id="vgen-last-input" accept="image/*" style="display:none;" onchange="vgenFileImage(event,'last')">
+                        <div id="vgen-last-preview" style="display:none;"><img style="max-height:72px;border-radius:6px;max-width:100%;"></div>
+                        <div id="vgen-last-placeholder" style="color:var(--text-muted);font-size:12px;"><div style="font-size:18px;margin-bottom:3px;">🖼</div>+ Last frame</div>
+                      </div>
+                    </div>
+
+                    <!-- Параметры -->
+                    <div style="display:flex;flex-direction:column;gap:10px;">
+                      <div>
+                        <label style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;display:block;margin-bottom:5px;">aspect_ratio</label>
+                        <div id="vgen-ratio-row" style="display:flex;gap:6px;flex-wrap:wrap;">
+                          <label class="vgen-ratio-btn active" data-val="16:9"><input type="radio" name="vgen-ratio" value="16:9" checked style="display:none;">16:9</label>
+                          <label class="vgen-ratio-btn" data-val="9:16"><input type="radio" name="vgen-ratio" value="9:16" style="display:none;">9:16</label>
+                          <label class="vgen-ratio-btn" data-val="1:1"><input type="radio" name="vgen-ratio" value="1:1" style="display:none;">1:1</label>
+                        </div>
+                      </div>
+                      <div>
+                        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+                          <label style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;">duration</label>
+                          <span id="vgen-dur-val" style="font-size:14px;font-weight:800;color:var(--accent);">5s</span>
+                        </div>
+                        <div id="vgen-dur-slider-wrap" style="position:relative;padding:4px 0;">
+                          <input type="range" id="vgen-dur-slider" name="vgen-dur" min="5" max="20" step="5" value="5"
+                            oninput="vgenDurInput(this)"
+                            style="width:100%;accent-color:var(--accent);cursor:pointer;height:4px;">
+                          <div id="vgen-dur-ticks" style="display:flex;justify-content:space-between;margin-top:4px;">
+                            <span style="font-size:10px;color:var(--text-muted);">5s</span>
+                            <span style="font-size:10px;color:var(--text-muted);">10s</span>
+                            <span style="font-size:10px;color:var(--text-muted);">15s</span>
+                            <span style="font-size:10px;color:var(--text-muted);">20s</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div>
+                        <label style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;display:block;margin-bottom:5px;">resolution</label>
+                        <div id="vgen-res-row" style="display:flex;gap:6px;flex-wrap:wrap;">
+                          <label class="vgen-ratio-btn" data-val="480p"><input type="radio" name="vgen-res" value="480p" style="display:none;">480p</label>
+                          <label class="vgen-ratio-btn active" data-val="720p"><input type="radio" name="vgen-res" value="720p" checked style="display:none;">720p</label>
+                          <label class="vgen-ratio-btn" data-val="1080p"><input type="radio" name="vgen-res" value="1080p" style="display:none;">1080p</label>
+                          <label class="vgen-ratio-btn" data-val="4k"><input type="radio" name="vgen-res" value="4k" style="display:none;">4K</label>
+                        </div>
+                      </div>
+                      <div id="vgen-model-notes" style="font-size:11px;color:var(--accent);opacity:0.8;">Seedance 2.0 · 4–15 сек · до 4K</div>
+                    </div>
+
+                  </div>
+
+                  <!-- Run button -->
+                  <div style="padding:12px 14px;border-top:1px solid var(--border);display:flex;align-items:center;gap:10px;">
+                    <div style="flex:1;font-size:12px;color:var(--text-muted);" id="vgen-credit-hint">💎 ~80–240 кредитов</div>
+                    <button id="vgen-run-btn" onclick="vgenRun()" style="background:var(--accent);color:#fff;border:none;border-radius:8px;padding:10px 24px;font-weight:700;font-size:13px;cursor:pointer;transition:background 0.15s;">▶ Run</button>
+                  </div>
+                </div>
+
+                <!-- Output колонка -->
+                <div style="flex:1;display:flex;flex-direction:column;overflow:hidden;">
+                  <div style="padding:14px 16px 10px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+                    <span style="font-size:13px;font-weight:700;color:var(--text);">Output</span>
+                    <span id="vgen-output-type" style="font-size:12px;color:var(--accent);background:rgba(108,99,255,0.12);padding:2px 10px;border-radius:20px;display:none;">video</span>
+                  </div>
+                  <div style="flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:12px;" id="vgen-output-area">
+                    <!-- Placeholder -->
+                    <div id="vgen-output-placeholder" style="flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;color:var(--text-muted);min-height:200px;">
+                      <div style="font-size:40px;opacity:0.25;">🎬</div>
+                      <div style="font-size:13px;">Результат появится здесь</div>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+            <!-- Монтаж -->
+            <div class="vtab-panel" id="vtab-edit">
+              <div class="card">
+                <h3>✂️ Монтаж видео</h3>
+                <p>Инструменты монтажа — в разработке.</p>
+              </div>
+              <div style="margin-top:16px;background:var(--card-bg);border:1px dashed var(--border);border-radius:12px;padding:40px 24px;text-align:center;color:var(--text-muted);">
+                <div style="font-size:36px;margin-bottom:12px;opacity:0.4;">✂️</div>
+                <div style="font-size:14px;">Монтаж видеоматериалов проекта</div>
+                <div style="font-size:12px;margin-top:6px;opacity:0.7;">Загрузите видеофайлы для начала работы</div>
+              </div>
+            </div>
+
+            <!-- Логи KIE -->
+            <div class="vtab-panel" id="vtab-logs" style="padding:0;">
+              <!-- Toolbar -->
+              <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                <input id="kie-logs-search-model" placeholder="Model name filter" style="background:var(--card-bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 12px;font-size:12px;outline:none;width:170px;" oninput="kieLogsFilter()">
+                <input id="kie-logs-search-task" placeholder="Task ID filter" style="background:var(--card-bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 12px;font-size:12px;outline:none;width:170px;" oninput="kieLogsFilter()">
+                <select id="kie-logs-status" onchange="kieLogsFilter()" style="background:var(--card-bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 12px;font-size:12px;cursor:pointer;">
+                  <option value="">Select Status</option>
+                  <option value="success">Success</option>
+                  <option value="pending">Pending</option>
+                  <option value="fail">Fail</option>
+                </select>
+                <button onclick="kieLogsLoad()" style="margin-left:auto;background:var(--card-bg);border:1px solid var(--border);border-radius:6px;padding:6px 14px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer;display:flex;align-items:center;gap:5px;">
+                  ↺ Refresh
+                </button>
+              </div>
+
+              <!-- Table -->
+              <div style="flex:1;overflow:auto;">
+                <table class="kie-logs-table">
+                  <thead>
+                    <tr>
+                      <th style="width:36px;"></th>
+                      <th>Model &amp; Details</th>
+                      <th>Param</th>
+                      <th>Status</th>
+                      <th>Credits Consumed</th>
+                      <th>Task ID</th>
+                      <th>Results</th>
+                    </tr>
+                  </thead>
+                  <tbody id="kie-logs-tbody">
+                    <tr id="kie-logs-empty">
+                      <td colspan="7" style="text-align:center;padding:40px;color:var(--text-muted);font-size:13px;">
+                        <div style="font-size:28px;margin-bottom:8px;opacity:0.3;">📋</div>
+                        No logs found
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
 
     <!-- НЕ ГОТОВО pages -->
     <div class="page" id="page-todo-seo">
@@ -417,6 +929,7 @@ const pageMeta = {
   'done-video':   { title: 'Генерация видео',   badge: 'badge-done', label: 'Готово'    },
   'wip-logs':     { title: 'Логи задач',         badge: 'badge-wip',  label: 'В работе'  },
   'wip-api':      { title: 'Настройки API',      badge: 'badge-wip',  label: 'В работе'  },
+  'wip-video':    { title: 'Видео',              badge: 'badge-wip',  label: 'В работе'  },
   'todo-seo':     { title: 'SEO-инструменты',   badge: 'badge-todo', label: 'Не готово' },
   'todo-reports': { title: 'Отчёты',             badge: 'badge-todo', label: 'Не готово' },
   'todo-auth':    { title: 'Авторизация',        badge: 'badge-todo', label: 'Не готово' },
@@ -453,6 +966,836 @@ function updateCounts() {
 }
 
 updateCounts();
+
+// ═══════ Video Studio — Projects ═══════
+const VPROJ_KEY = 'video_projects';
+let vActiveProject = null;
+
+function vprojLoad() {
+  return JSON.parse(localStorage.getItem(VPROJ_KEY) || '[]');
+}
+function vprojSave(list) {
+  localStorage.setItem(VPROJ_KEY, JSON.stringify(list));
+}
+
+function vprojRender() {
+  const list = vprojLoad();
+  const el = document.getElementById('vproj-list');
+  const empty = document.getElementById('vproj-empty');
+  if (!el) return;
+  // Clear all items but keep empty placeholder
+  el.querySelectorAll('.vproj-item').forEach(n => n.remove());
+  empty.style.display = list.length ? 'none' : 'block';
+  list.forEach(proj => {
+    const item = document.createElement('div');
+    item.className = 'vproj-item' + (proj.id === vActiveProject ? ' active' : '');
+    item.dataset.id = proj.id;
+    item.innerHTML = `
+      <span class="nav-item-icon" style="font-size:14px;">📁</span>
+      <span class="vproj-item-name">${proj.name}</span>
+      <button class="vproj-del-btn" onclick="vprojDelete('${proj.id}',event)" title="Удалить">✕</button>`;
+    item.addEventListener('click', () => vprojSelect(proj.id));
+    el.appendChild(item);
+  });
+}
+
+function vprojCreate() {
+  const list = vprojLoad();
+  const id = 'vp_' + Date.now();
+  const name = 'Проект ' + (list.length + 1);
+  list.push({ id, name, created: Date.now() });
+  vprojSave(list);
+  vprojRender();
+  vprojSelect(id);
+  // Immediately enter rename mode
+  setTimeout(() => vprojStartRename(id), 50);
+}
+
+function vprojSelect(id) {
+  vActiveProject = id;
+  window._vprojSelected = id;
+  vprojRender();
+  const ph = document.getElementById('vwork-placeholder');
+  const wc = document.getElementById('vwork-content');
+  if (ph) ph.style.display = 'none';
+  if (wc) { wc.style.display = 'flex'; }
+  // обновить label библиотеки
+  const lbl = document.getElementById('vref-proj-label');
+  const projs = vprojLoad();
+  const proj = projs.find(p => p.id === id);
+  if (lbl && proj) lbl.textContent = 'Проект: ' + proj.name;
+}
+
+function vprojDelete(id, e) {
+  e.stopPropagation();
+  const list = vprojLoad().filter(p => p.id !== id);
+  vprojSave(list);
+  if (vActiveProject === id) {
+    vActiveProject = list[0]?.id || null;
+    if (!vActiveProject) {
+      document.getElementById('vwork-placeholder').style.display = 'flex';
+      document.getElementById('vwork-content').style.display = 'none';
+    } else {
+      vprojSelect(vActiveProject);
+    }
+  }
+  vprojRender();
+}
+
+function vprojStartRename(id) {
+  const item = document.querySelector(`.vproj-item[data-id="${id}"]`);
+  if (!item) return;
+  const nameSpan = item.querySelector('.vproj-item-name');
+  const list = vprojLoad();
+  const proj = list.find(p => p.id === id);
+  if (!proj) return;
+  const input = document.createElement('input');
+  input.className = 'vproj-item-name-input';
+  input.value = proj.name;
+  nameSpan.replaceWith(input);
+  input.focus();
+  input.select();
+  const commit = () => {
+    const newName = input.value.trim() || proj.name;
+    const updated = vprojLoad().map(p => p.id === id ? { ...p, name: newName } : p);
+    vprojSave(updated);
+    vprojRender();
+  };
+  input.addEventListener('blur', commit);
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') input.blur(); if (e.key === 'Escape') { input.value = proj.name; input.blur(); } });
+  // Double-click on name to rename
+  item.addEventListener('dblclick', () => vprojStartRename(id), { once: true });
+}
+
+// Tab switcher
+function vswitchTab(tab, btn) {
+  document.querySelectorAll('.vtab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.vtab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('vtab-' + tab)?.classList.add('active');
+  btn.classList.add('active');
+}
+
+// ── KIE Logs ──
+let kieLogsAll = [];
+
+async function kieLogsLoad() {
+  const tbody = document.getElementById('kie-logs-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--text-muted);font-size:12px;">⏳ Загрузка...</td></tr>`;
+
+  const key = localStorage.getItem('kie_api_key');
+  if (!key) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:30px;color:#ef4444;font-size:12px;">⚠️ Добавьте KIE API ключ в настройках ⚙️</td></tr>`;
+    return;
+  }
+
+  try {
+    const r = await fetch('/api/kie/logs', { headers: { 'x-kie-key': key } });
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error || 'Ошибка загрузки');
+    kieLogsAll = d.logs || [];
+    kieLogsFilter();
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:30px;color:#ef4444;font-size:12px;">❌ ${e.message}</td></tr>`;
+  }
+}
+
+function kieLogsFilter() {
+  const modelQ = (document.getElementById('kie-logs-search-model')?.value || '').toLowerCase();
+  const taskQ  = (document.getElementById('kie-logs-search-task')?.value || '').toLowerCase();
+  const statusQ = document.getElementById('kie-logs-status')?.value || '';
+
+  let rows = kieLogsAll.filter(log => {
+    const model = (log.model || log.modelId || '').toLowerCase();
+    const taskId = (log.taskId || '').toLowerCase();
+    const status = (log.state || log.status || '').toLowerCase();
+    if (modelQ && !model.includes(modelQ)) return false;
+    if (taskQ  && !taskId.includes(taskQ))  return false;
+    if (statusQ && !status.includes(statusQ)) return false;
+    return true;
+  });
+
+  const tbody = document.getElementById('kie-logs-tbody');
+  if (!tbody) return;
+
+  if (!rows.length) {
+    tbody.innerHTML = `<tr id="kie-logs-empty"><td colspan="7" style="text-align:center;padding:40px;color:var(--text-muted);font-size:13px;"><div style="font-size:28px;margin-bottom:8px;opacity:0.3;">📋</div>No logs found</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = rows.map(log => {
+    const model = log.model || log.modelId || '—';
+    const taskId = log.taskId || '—';
+    const state = (log.state || log.status || 'unknown').toLowerCase();
+    const credits = log.creditsConsumed != null ? log.creditsConsumed : '—';
+    const created = log.createdAt ? new Date(log.createdAt).toLocaleString('ru-RU', {month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) : '';
+
+    // parse result URLs
+    let resultUrls = [];
+    try { resultUrls = JSON.parse(log.resultJson || '{}').resultUrls || []; } catch {}
+    const firstUrl = resultUrls[0] || '';
+
+    // params
+    let paramStr = '';
+    try {
+      const inp = typeof log.input === 'string' ? JSON.parse(log.input) : (log.input || {});
+      const parts = [];
+      if (inp.aspect_ratio) parts.push(inp.aspect_ratio);
+      if (inp.duration)     parts.push(inp.duration + 's');
+      if (inp.resolution)   parts.push(inp.resolution);
+      paramStr = parts.join(' · ') || '—';
+    } catch {}
+
+    const statusClass = state === 'success' ? 'success' : state === 'fail' ? 'fail' : state === 'processing' ? 'processing' : 'pending';
+    const statusLabel = state === 'success' ? 'Success' : state === 'fail' ? 'Fail' : state === 'processing' ? 'Processing' : 'Pending';
+
+    const shortModel = model.replace('bytedance/', '');
+
+    return `<tr>
+      <td><button class="kie-log-expand-btn" onclick="kieLogExpand(this, '${taskId}')" title="Детали">▶</button></td>
+      <td>
+        <div class="kie-log-model-badge">${shortModel}</div>
+        ${created ? `<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">${created}</div>` : ''}
+      </td>
+      <td style="color:var(--text-muted);font-size:11px;">${paramStr}</td>
+      <td><span class="kie-log-status ${statusClass}"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block;"></span>${statusLabel}</span></td>
+      <td style="color:var(--text-muted);">${credits !== '—' ? '💎 ' + credits : '—'}</td>
+      <td><span class="kie-log-taskid" onclick="navigator.clipboard.writeText('${taskId}');this.textContent='Copied!';setTimeout(()=>this.textContent='${taskId.slice(0,16)}…',1200)" title="${taskId}">${taskId.slice(0,16)}…</span></td>
+      <td>${firstUrl ? `<a href="${firstUrl}" target="_blank"><video class="kie-log-thumb" src="${firstUrl}" muted></video></a>` : '<span style="color:var(--text-muted);font-size:11px;">—</span>'}</td>
+    </tr>`;
+  }).join('');
+}
+
+function kieLogExpand(btn, taskId) {
+  const tr = btn.closest('tr');
+  const next = tr.nextElementSibling;
+  if (next && next.classList.contains('kie-log-detail-row')) {
+    next.remove(); btn.textContent = '▶'; return;
+  }
+  btn.textContent = '▼';
+  const log = kieLogsAll.find(l => l.taskId === taskId);
+  if (!log) return;
+  let inp = {};
+  try { inp = typeof log.input === 'string' ? JSON.parse(log.input) : (log.input || {}); } catch {}
+  const detail = document.createElement('tr');
+  detail.className = 'kie-log-detail-row';
+  detail.innerHTML = `<td colspan="7" style="padding:12px 16px 16px;background:rgba(108,99,255,0.05);border-bottom:1px solid var(--border);">
+    <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;font-weight:700;">PROMPT</div>
+    <div style="font-size:13px;color:var(--text);line-height:1.5;margin-bottom:10px;">${inp.prompt || log.prompt || '—'}</div>
+    ${log.failMsg ? `<div style="color:#ef4444;font-size:12px;">❌ ${log.failMsg}</div>` : ''}
+    <div style="font-size:11px;color:var(--text-muted);margin-top:6px;">Task ID: <code style="color:var(--accent);">${taskId}</code></div>
+  </td>`;
+  tr.insertAdjacentElement('afterend', detail);
+}
+
+// ── Model tabs ──
+// Parameters sourced from fal.ai API docs (Seedance 2.0, Veo 3)
+const VGEN_MODELS = {
+  seedance: {
+    creditHint: '💎 ~80–240 кредитов',
+    submodels: [
+      { value: 'fast', label: 'Lite (fast)' },
+      { value: 'pro',  label: 'Pro' },
+    ],
+    durMin: 4, durMax: 15, durStep: 1, defaultDuration: 5,
+    aspects: ['16:9', '9:16', '21:9', '4:3', '3:4', '1:1'],
+    resolutions: ['480p', '720p', '1080p', '4k'],
+    defaultResolution: '720p',
+    notes: 'Seedance 2.0 · 4–15 сек · до 4K',
+  },
+  veo: {
+    creditHint: '💎 ~200–500 кредитов',
+    submodels: [],
+    durMin: 4, durMax: 8, durStep: 2, defaultDuration: 8,
+    aspects: ['16:9', '9:16'],
+    resolutions: ['720p', '1080p'],
+    defaultResolution: '720p',
+    notes: 'Veo 3 · 4 / 6 / 8 сек · до 1080p',
+  },
+  omni: {
+    creditHint: '💎 ~100–300 кредитов',
+    submodels: [],
+    durMin: 1, durMax: 10, durStep: 1, defaultDuration: 5,
+    aspects: ['16:9', '9:16', '1:1'],
+    resolutions: ['480p', '720p', '1080p'],
+    defaultResolution: '720p',
+    notes: 'Gemini Omni · 1–10 сек · до 1080p',
+  },
+};
+let vgenActiveModel = 'seedance';
+
+function vgenSelectModel(model, btn) {
+  vgenActiveModel = model;
+  document.querySelectorAll('.vgen-model-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const cfg = VGEN_MODELS[model] || VGEN_MODELS.seedance;
+
+  // submodel row
+  const subRow = document.getElementById('vgen-submodel-row');
+  if (subRow) {
+    if (cfg.submodels.length) {
+      subRow.style.display = 'flex';
+      subRow.innerHTML = cfg.submodels.map((s, i) =>
+        `<label class="vgen-ratio-btn${i === 0 ? ' active' : ''}" data-val="${s.value}">
+          <input type="radio" name="vgen-qual" value="${s.value}" ${i === 0 ? 'checked' : ''} style="display:none;">${s.label}
+        </label>`
+      ).join('');
+      // re-bind pill clicks
+      subRow.querySelectorAll('.vgen-ratio-btn').forEach(lbl => {
+        lbl.addEventListener('click', () => {
+          subRow.querySelectorAll('.vgen-ratio-btn').forEach(b => b.classList.remove('active'));
+          lbl.classList.add('active');
+          lbl.querySelector('input').checked = true;
+        });
+      });
+    } else {
+      subRow.style.display = 'none';
+    }
+  }
+
+  // duration slider
+  const slider = document.getElementById('vgen-dur-slider');
+  const durVal = document.getElementById('vgen-dur-val');
+  const ticks  = document.getElementById('vgen-dur-ticks');
+  if (slider) {
+    slider.min   = cfg.durMin;
+    slider.max   = cfg.durMax;
+    slider.step  = cfg.durStep;
+    slider.value = cfg.defaultDuration;
+    if (durVal) durVal.textContent = cfg.defaultDuration + 's';
+    if (ticks) {
+      // show up to 5 tick labels evenly spaced
+      const allVals = [];
+      for (let v = cfg.durMin; v <= cfg.durMax; v += cfg.durStep) allVals.push(v);
+      let tickLabels;
+      if (allVals.length <= 6) {
+        tickLabels = allVals;
+      } else {
+        tickLabels = [cfg.durMin, Math.round((cfg.durMin + cfg.durMax) / 2), cfg.durMax];
+      }
+      ticks.innerHTML = tickLabels.map(d => `<span style="font-size:10px;color:var(--text-muted);">${d}s</span>`).join('');
+    }
+  }
+
+  // aspect ratio buttons
+  const ratioRow = document.getElementById('vgen-ratio-row');
+  if (ratioRow) {
+    ratioRow.innerHTML = cfg.aspects.map((a, i) =>
+      `<label class="vgen-ratio-btn${i === 0 ? ' active' : ''}" data-val="${a}">
+        <input type="radio" name="vgen-ratio" value="${a}" ${i === 0 ? 'checked' : ''} style="display:none;">${a}
+      </label>`
+    ).join('');
+    ratioRow.querySelectorAll('.vgen-ratio-btn').forEach(lbl => {
+      lbl.addEventListener('click', () => {
+        ratioRow.querySelectorAll('.vgen-ratio-btn').forEach(b => b.classList.remove('active'));
+        lbl.classList.add('active');
+        lbl.querySelector('input').checked = true;
+      });
+    });
+  }
+
+  // resolution buttons
+  const resRow = document.getElementById('vgen-res-row');
+  if (resRow) {
+    resRow.innerHTML = cfg.resolutions.map((r, i) =>
+      `<label class="vgen-ratio-btn${r === cfg.defaultResolution ? ' active' : ''}" data-val="${r}">
+        <input type="radio" name="vgen-res" value="${r}" ${r === cfg.defaultResolution ? 'checked' : ''} style="display:none;">${r}
+      </label>`
+    ).join('');
+    resRow.querySelectorAll('.vgen-ratio-btn').forEach(lbl => {
+      lbl.addEventListener('click', () => {
+        resRow.querySelectorAll('.vgen-ratio-btn').forEach(b => b.classList.remove('active'));
+        lbl.classList.add('active');
+        lbl.querySelector('input').checked = true;
+      });
+    });
+  }
+
+  // notes
+  const notes = document.getElementById('vgen-model-notes');
+  if (notes) notes.textContent = cfg.notes;
+
+  // credit hint
+  const hint = document.getElementById('vgen-credit-hint');
+  if (hint) hint.textContent = cfg.creditHint;
+}
+
+// ── Reference Library ──
+let vrefPickSlot = null; // 'first' | 'last' | null
+
+function vrefKey() {
+  // per-project key using current selected project id
+  const proj = (window._vprojSelected != null) ? window._vprojSelected : 'global';
+  return 'vref_images_' + proj;
+}
+
+function vrefGetImages() {
+  try { return JSON.parse(localStorage.getItem(vrefKey()) || '[]'); } catch { return []; }
+}
+
+function vrefSaveImages(arr) {
+  localStorage.setItem(vrefKey(), JSON.stringify(arr));
+}
+
+function vrefOpen() {
+  vrefPickSlot = null;
+  const hint = document.getElementById('vref-pick-hint');
+  if (hint) hint.style.display = 'none';
+  vrefRender();
+  const m = document.getElementById('modal-vref');
+  if (m) { m.style.display = 'flex'; }
+}
+
+function vrefPickOpen(slot) {
+  vrefPickSlot = slot;
+  const hint = document.getElementById('vref-pick-hint');
+  if (hint) hint.style.display = 'block';
+  vrefRender();
+  const m = document.getElementById('modal-vref');
+  if (m) { m.style.display = 'flex'; }
+  // update proj label
+  const lbl = document.getElementById('vref-proj-label');
+  if (lbl) lbl.textContent = slot === 'first' ? 'Выбор для First Frame' : 'Выбор для Last Frame';
+}
+
+function vrefClose() {
+  vrefPickSlot = null;
+  const m = document.getElementById('modal-vref');
+  if (m) m.style.display = 'none';
+}
+
+function vrefUpload(event) {
+  const files = Array.from(event.target.files);
+  if (!files.length) return;
+  const images = vrefGetImages();
+  let loaded = 0;
+  files.forEach(file => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      images.push({ id: Date.now() + Math.random(), name: file.name, data: e.target.result, added: Date.now() });
+      loaded++;
+      if (loaded === files.length) { vrefSaveImages(images); vrefRender(); }
+    };
+    reader.readAsDataURL(file);
+  });
+  event.target.value = '';
+}
+
+function vrefDelete(id) {
+  const images = vrefGetImages().filter(img => img.id !== id);
+  vrefSaveImages(images);
+  vrefRender();
+}
+
+function vrefPick(img) {
+  if (!vrefPickSlot) return;
+  vgenSetImage(vrefPickSlot, img.data);
+  vrefClose();
+}
+
+function vrefRender() {
+  const images = vrefGetImages();
+  const grid = document.getElementById('vref-grid');
+  const empty = document.getElementById('vref-empty');
+  const cnt = document.getElementById('vref-count');
+  if (!grid) return;
+  if (cnt) cnt.textContent = images.length + ' изображений';
+  // remove old cards
+  grid.querySelectorAll('.vref-card').forEach(c => c.remove());
+  if (!images.length) {
+    if (empty) empty.style.display = 'block';
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+  const isPick = !!vrefPickSlot;
+  images.slice().reverse().forEach(img => {
+    const div = document.createElement('div');
+    div.className = 'vref-card';
+    div.style.cssText = 'position:relative;border-radius:8px;overflow:hidden;border:1px solid var(--border);cursor:' + (isPick ? 'pointer' : 'default') + ';transition:border-color 0.15s;';
+    div.innerHTML = `
+      <img src="${img.data}" style="width:100%;height:90px;object-fit:cover;display:block;" loading="lazy">
+      <div class="vref-card-footer" style="padding:4px 6px;background:var(--card-bg);display:flex;align-items:center;gap:4px;">
+        <span style="flex:1;font-size:10px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${img.name}">${img.name}</span>
+        <button onclick="event.stopPropagation();vrefDelete(${img.id})" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:12px;padding:0;line-height:1;" title="Удалить">✕</button>
+      </div>`;
+    if (isPick) {
+      div.addEventListener('click', () => { div.style.borderColor='var(--accent)'; vrefPick(img); });
+      div.addEventListener('mouseover', () => div.style.borderColor='var(--accent)');
+      div.addEventListener('mouseout', () => div.style.borderColor='var(--border)');
+    }
+    grid.appendChild(div);
+  });
+}
+
+// expose vprojSelected tracking so vrefKey works
+const _origVprojSelect = window.vprojSelect;
+
+// ── Video Generation ──
+const vgenState = { firstImageUrl: null, lastImageUrl: null, pollTimer: null };
+
+// Radio pill selection
+document.addEventListener('DOMContentLoaded', () => {
+  // ratio/qual pill clicks
+  document.querySelectorAll('.vgen-ratio-btn').forEach(lbl => {
+    lbl.addEventListener('click', () => {
+      const name = lbl.querySelector('input')?.name;
+      document.querySelectorAll(`.vgen-ratio-btn input[name="${name}"]`).forEach(inp => {
+        inp.closest('.vgen-ratio-btn').classList.remove('active');
+      });
+      lbl.classList.add('active');
+      lbl.querySelector('input').checked = true;
+    });
+  });
+  // format pill clicks
+  document.querySelectorAll('.vgen-fmt-btn').forEach(lbl => {
+    lbl.addEventListener('click', () => {
+      document.querySelectorAll('.vgen-fmt-btn').forEach(b => b.classList.remove('active'));
+      lbl.classList.add('active');
+      lbl.querySelector('input').checked = true;
+    });
+  });
+});
+
+// ── Prompt Enhancement ──
+const ENHANCE_RULES = {
+  seedance: {
+    system: `You are an expert video prompt engineer for Seedance 2.0 (ByteDance).
+Rules:
+- Open with shot structure declaration: "Montage, multi-shot Hollywood action..." or "Single continuous shot, first-person POV..."
+- Use cinematic camera language: dolly, tilt, arc, crane, handheld
+- Add temporal markers: "0–Xs: ..., Xs–Ys: ..."
+- Describe lighting, atmosphere, textures in detail
+- Include audio description: ambient sounds, music tone
+- For multi-shot: specify each shot separately
+- End with: "photorealistic, 35mm film grain, ARRI ALEXA aesthetic"
+- Write in English only`,
+  },
+  veo: {
+    system: `You are an expert video prompt engineer for Google Veo 3.
+Rules:
+- No Russian or any non-English text/words in the video (no subtitles, no signs, no labels in Russian)
+- Infographics and data visualizations ARE allowed and encouraged for explainer content
+- Describe camera movements explicitly: pan, zoom, tilt, dolly
+- Include audio cues: "with ambient sound", "with voiceover describing..."
+- Veo generates native audio — describe soundscape
+- Duration is fixed (4/6/8s) — be precise about what happens in that timeframe
+- Focus on visual clarity and motion
+- Write in English only`,
+  },
+  omni: {
+    system: `You are an expert video prompt engineer for Google Gemini Omni video generation.
+Rules:
+- Describe scene with rich visual detail: colors, textures, lighting
+- Specify camera angle and movement
+- Include time-based progression for longer clips
+- Can include text overlays described in English
+- Describe style: realistic, animated, illustrated
+- Mention mood and atmosphere
+- Write in English only`,
+  },
+};
+
+const FORMAT_CONTEXT = {
+  cinematic: 'Style: cinematic, Hollywood production quality, dramatic lighting, wide shots mixed with close-ups, professional color grading',
+  viral:     'Style: viral social media video, fast cuts, eye-catching visuals, trending aesthetic, high energy, designed for maximum engagement and shares',
+  cartoon:   'Style: animated cartoon, vibrant colors, stylized characters, smooth animation, playful visual design',
+  documentary: 'Style: documentary realism, naturalistic lighting, observational camera work, authentic atmosphere, informational tone',
+  ad:        'Style: commercial advertisement, clean aesthetic, product-focused, aspirational lifestyle visuals, polished and modern',
+};
+
+async function vgenEnhancePrompt() {
+  const promptEl = document.getElementById('vgen-prompt');
+  const btn = document.getElementById('vgen-enhance-btn');
+  const status = document.getElementById('vgen-enhance-status');
+  const prompt = promptEl?.value.trim();
+
+  if (!prompt) { promptEl?.focus(); return; }
+
+  const model  = vgenActiveModel || 'seedance';
+  const format = document.querySelector('input[name="vgen-format"]:checked')?.value || 'cinematic';
+  const dur    = document.getElementById('vgen-dur-slider')?.value || '5';
+
+  btn.disabled = true;
+  btn.innerHTML = '⏳ Улучшаю...';
+  if (status) { status.style.display = 'inline'; status.textContent = 'Claude переписывает...'; }
+
+  try {
+    const anthropicKey  = localStorage.getItem('anthropic_api_key') || '';
+    const openrouterKey = localStorage.getItem('openrouter_api_key') || '';
+    if (!anthropicKey && !openrouterKey) {
+      if (status) { status.style.display = 'inline'; status.textContent = '⚠️ Добавьте Anthropic или OpenRouter ключ в ⚙️'; }
+      btn.disabled = false; btn.innerHTML = '✨ Улучшить промт';
+      setTimeout(() => { if (status) status.style.display = 'none'; }, 4000);
+      return;
+    }
+    const headers = { 'Content-Type': 'application/json' };
+    if (anthropicKey)  headers['x-anthropic-key']  = anthropicKey;
+    if (openrouterKey) headers['x-openrouter-key'] = openrouterKey;
+    const r = await fetch('/api/enhance-prompt', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ prompt, model, format, duration: dur }),
+    });
+    const d = await r.json();
+    if (d.ok && d.enhanced) {
+      promptEl.value = d.enhanced;
+      promptEl.style.borderColor = 'var(--accent)';
+      setTimeout(() => promptEl.style.borderColor = 'var(--border)', 1500);
+      if (status) status.textContent = '✓ Готово';
+    } else {
+      if (status) status.textContent = '❌ ' + (d.error || 'Ошибка');
+    }
+  } catch (e) {
+    if (status) status.textContent = '❌ ' + e.message;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '✨ Улучшить промт';
+    setTimeout(() => { if (status) status.style.display = 'none'; }, 3000);
+  }
+}
+
+function vgenDurInput(slider) {
+  const val = document.getElementById('vgen-dur-val');
+  if (val) val.textContent = slider.value + 's';
+}
+
+function vgenGetParam(name) {
+  if (name === 'vgen-dur') {
+    const slider = document.getElementById('vgen-dur-slider');
+    return slider ? slider.value : '5';
+  }
+  const el = document.querySelector(`input[name="${name}"]:checked`);
+  return el ? el.value : null;
+}
+
+function vgenReset() {
+  document.getElementById('vgen-prompt').value = '';
+  vgenClearImage('first');
+  vgenClearImage('last');
+  // reset ratio
+  const firstRatio = document.querySelector('input[name="vgen-ratio"]');
+  if (firstRatio) { firstRatio.checked = true; firstRatio.closest('.vgen-ratio-btn')?.click(); }
+  // reset slider to model default
+  const cfg = VGEN_MODELS[vgenActiveModel] || VGEN_MODELS.seedance;
+  const slider = document.getElementById('vgen-dur-slider');
+  if (slider) { slider.value = cfg.defaultDuration; vgenDurInput(slider); }
+  // reset quality
+  const firstQual = document.querySelector('#vgen-submodel-row input[name="vgen-qual"]');
+  if (firstQual) { firstQual.checked = true; firstQual.closest('.vgen-ratio-btn')?.click(); }
+  vgenClearOutput();
+}
+
+function vgenClearOutput() {
+  const area = document.getElementById('vgen-output-area');
+  const ph = document.getElementById('vgen-output-placeholder');
+  const ot = document.getElementById('vgen-output-type');
+  area.querySelectorAll('.vgen-result-card,.vgen-progress,.vgen-err').forEach(e => e.remove());
+  if (ph) ph.style.display = 'flex';
+  if (ot) ot.style.display = 'none';
+}
+
+// Image upload helpers
+function vgenReadFile(file, slot) {
+  const reader = new FileReader();
+  reader.onload = e => vgenSetImage(slot, e.target.result);
+  reader.readAsDataURL(file);
+}
+function vgenFileImage(event, slot) { if (event.target.files[0]) vgenReadFile(event.target.files[0], slot); }
+function vgenDropImage(event, slot) {
+  event.preventDefault();
+  document.getElementById(`vgen-${slot}-drop`).style.borderColor = 'var(--border)';
+  const file = event.dataTransfer.files[0];
+  if (file && file.type.startsWith('image/')) vgenReadFile(file, slot);
+}
+function vgenSetImage(slot, dataUrl) {
+  const preview = document.getElementById(`vgen-${slot}-preview`);
+  const ph = document.getElementById(`vgen-${slot}-placeholder`);
+  const clearBtn = document.getElementById(`vgen-clear-${slot}`);
+  preview.querySelector('img').src = dataUrl;
+  preview.style.display = 'block';
+  ph.style.display = 'none';
+  if (clearBtn) clearBtn.style.display = 'inline';
+  vgenState[slot + 'ImageUrl'] = dataUrl;
+}
+function vgenClearImage(slot) {
+  const preview = document.getElementById(`vgen-${slot}-preview`);
+  const ph = document.getElementById(`vgen-${slot}-placeholder`);
+  const clearBtn = document.getElementById(`vgen-clear-${slot}`);
+  const input = document.getElementById(`vgen-${slot}-input`);
+  if (preview) { preview.style.display = 'none'; preview.querySelector('img').src = ''; }
+  if (ph) ph.style.display = 'flex';
+  if (clearBtn) clearBtn.style.display = 'none';
+  if (input) input.value = '';
+  vgenState[slot + 'ImageUrl'] = null;
+}
+
+// Upload image to server (base64 → URL)
+async function vgenUploadImage(base64) {
+  try {
+    const r = await fetch('/api/kie/upload-image', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ base64, filename: 'frame.jpg' })
+    });
+    const d = await r.json();
+    return d.ok ? d.url : null;
+  } catch { return null; }
+}
+
+function vgenShowProgress(msg) {
+  vgenClearOutput();
+  const ph = document.getElementById('vgen-output-placeholder');
+  if (ph) ph.style.display = 'none';
+  const area = document.getElementById('vgen-output-area');
+  const div = document.createElement('div');
+  div.className = 'vgen-progress';
+  div.id = 'vgen-progress-card';
+  div.innerHTML = `
+    <div style="display:flex;align-items:center;gap:10px;">
+      <span style="font-size:20px;">⏳</span>
+      <div>
+        <div style="font-size:13px;font-weight:600;color:var(--text);">Генерация видео</div>
+        <div id="vgen-progress-msg" style="font-size:12px;color:var(--text-muted);margin-top:2px;">${msg}</div>
+      </div>
+    </div>
+    <div class="vgen-progress-bar-wrap"><div class="vgen-progress-bar" id="vgen-pbar" style="width:5%;"></div></div>
+    <div style="font-size:11px;color:var(--text-muted);">Среднее время: 1–3 минуты</div>`;
+  area.appendChild(div);
+}
+
+function vgenAnimateProgress(pct) {
+  const bar = document.getElementById('vgen-pbar');
+  if (bar) bar.style.width = Math.min(pct, 95) + '%';
+}
+
+function vgenShowResult(url, credits, costTime) {
+  const card = document.getElementById('vgen-progress-card');
+  if (card) card.remove();
+  const ph = document.getElementById('vgen-output-placeholder');
+  if (ph) ph.style.display = 'none';
+  const ot = document.getElementById('vgen-output-type');
+  if (ot) ot.style.display = 'inline';
+  const area = document.getElementById('vgen-output-area');
+  const div = document.createElement('div');
+  div.className = 'vgen-result-card';
+  div.innerHTML = `
+    <video controls autoplay loop src="${url}"></video>
+    <div class="vgen-result-actions">
+      <a href="${url}" download target="_blank"
+        style="background:var(--accent);color:#fff;border:none;border-radius:7px;padding:7px 16px;font-size:12px;font-weight:700;cursor:pointer;text-decoration:none;">⬇ Скачать</a>
+      ${credits ? `<span style="font-size:11px;color:var(--text-muted);">💎 ${credits} кредитов</span>` : ''}
+      ${costTime ? `<span style="font-size:11px;color:var(--text-muted);">⏱ ${Math.round(costTime/1000)}с</span>` : ''}
+      <button onclick="this.closest('.vgen-result-card').remove()" style="margin-left:auto;background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:12px;">✕</button>
+    </div>`;
+  area.insertBefore(div, area.firstChild);
+}
+
+function vgenShowError(msg) {
+  const card = document.getElementById('vgen-progress-card');
+  if (card) card.remove();
+  const area = document.getElementById('vgen-output-area');
+  const div = document.createElement('div');
+  div.className = 'vgen-err';
+  div.style.cssText = 'padding:14px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:10px;color:#ef4444;font-size:13px;';
+  div.innerHTML = `❌ ${msg} <button onclick="this.parentNode.remove()" style="float:right;background:none;border:none;color:#ef4444;cursor:pointer;">✕</button>`;
+  area.insertBefore(div, area.firstChild);
+  const ph = document.getElementById('vgen-output-placeholder');
+  if (area.querySelectorAll('.vgen-result-card').length === 0 && ph) ph.style.display = 'flex';
+}
+
+async function vgenPoll(taskId, startTime, attempt) {
+  try {
+    const r = await fetch('/api/videogen/status/' + taskId);
+    const d = await r.json();
+    const elapsed = Math.round((Date.now() - startTime) / 1000);
+    if (d.status === 'success') {
+      vgenShowResult(d.url, d.credits, d.costTime);
+      const btn = document.getElementById('vgen-run-btn');
+      if (btn) { btn.disabled = false; btn.innerHTML = '▶ Run'; }
+      return;
+    }
+    if (d.status === 'failed') {
+      vgenShowError(d.error || 'Генерация не удалась');
+      const btn = document.getElementById('vgen-run-btn');
+      if (btn) { btn.disabled = false; btn.innerHTML = '▶ Run'; }
+      return;
+    }
+    // still pending
+    const pct = Math.min(5 + attempt * 3, 85);
+    vgenAnimateProgress(pct);
+    const msg = document.getElementById('vgen-progress-msg');
+    if (msg) msg.textContent = `Обработка... ${elapsed}с (попытка ${attempt})`;
+    vgenState.pollTimer = setTimeout(() => vgenPoll(taskId, startTime, attempt + 1), 4000);
+  } catch (e) {
+    vgenShowError('Ошибка проверки статуса: ' + e.message);
+  }
+}
+
+async function vgenRun() {
+  const prompt = document.getElementById('vgen-prompt')?.value.trim();
+  if (!prompt) { document.getElementById('vgen-prompt').focus(); return; }
+
+  const kieKey = localStorage.getItem('kie_api_key');
+  if (!kieKey) {
+    vgenClearOutput();
+    vgenShowError('Добавьте KIE API ключ в настройках ⚙️');
+    return;
+  }
+
+  const btn = document.getElementById('vgen-run-btn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '⏳ Запуск...'; }
+  if (vgenState.pollTimer) { clearTimeout(vgenState.pollTimer); vgenState.pollTimer = null; }
+
+  vgenShowProgress('Загрузка изображений...');
+
+  // Upload images if set
+  let firstUrl = null, lastUrl = null;
+  if (vgenState.firstImageUrl) {
+    vgenAnimateProgress(10);
+    firstUrl = await vgenUploadImage(vgenState.firstImageUrl);
+  }
+  if (vgenState.lastImageUrl) {
+    vgenAnimateProgress(15);
+    lastUrl = await vgenUploadImage(vgenState.lastImageUrl);
+  }
+
+  const aspect_ratio = vgenGetParam('vgen-ratio') || '16:9';
+  const duration = parseInt(vgenGetParam('vgen-dur') || '5');
+  const quality = vgenGetParam('vgen-qual') === 'pro' ? 'pro' : 'fast';
+  const resolution = vgenGetParam('vgen-res') || '720p';
+  const model = vgenActiveModel || 'seedance';
+
+  const msg = document.getElementById('vgen-progress-msg');
+  if (msg) msg.textContent = 'Создание задачи генерации...';
+  vgenAnimateProgress(20);
+
+  try {
+    const body = { prompt, quality, aspect_ratio, duration, resolution, model };
+    if (firstUrl) body.image_url = firstUrl;
+    if (lastUrl) body.end_image_url = lastUrl;
+
+    const r = await fetch('/api/videogen', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'x-kie-key': kieKey },
+      body: JSON.stringify(body)
+    });
+    const d = await r.json();
+    if (!d.ok || !d.taskId) {
+      vgenShowError(d.error || 'Не удалось запустить генерацию');
+      if (btn) { btn.disabled = false; btn.innerHTML = '▶ Run'; }
+      return;
+    }
+    if (msg) msg.textContent = `Задача создана: ${d.taskId}`;
+    vgenAnimateProgress(25);
+    vgenPoll(d.taskId, Date.now(), 1);
+  } catch (e) {
+    vgenShowError(e.message);
+    if (btn) { btn.disabled = false; btn.innerHTML = '▶ Run'; }
+  }
+}
+
+// Init on page open
+document.addEventListener('DOMContentLoaded', () => {
+  vprojRender();
+});
 
 // ═══════ Drag & Drop nav items between blocks ═══════
 (function() {
@@ -562,29 +1905,117 @@ updateCounts();
 })();
 
 // ═══════ API Settings Modal ═══════
+
+// Проверка одного ключа: возвращает {ok, error}
+async function checkOpenAIKey(key) {
+  try {
+    const r = await fetch('https://api.openai.com/v1/models', {
+      headers: { 'Authorization': 'Bearer ' + key }
+    });
+    return { ok: r.ok, error: r.ok ? null : 'HTTP ' + r.status };
+  } catch(e) { return { ok: false, error: e.message }; }
+}
+
+async function checkOpenRouterKey(key) {
+  try {
+    const r = await fetch('https://openrouter.ai/api/v1/models', {
+      headers: { 'Authorization': 'Bearer ' + key }
+    });
+    return { ok: r.ok, error: r.ok ? null : 'HTTP ' + r.status };
+  } catch(e) { return { ok: false, error: e.message }; }
+}
+
+async function checkKieKey(key) {
+  try {
+    const r = await fetch('/api/kie/check-key', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key })
+    });
+    const d = await r.json();
+    return { ok: !!d.ok, error: d.ok ? null : (d.error || 'Ключ не работает') };
+  } catch(e) { return { ok: false, error: e.message }; }
+}
+
+function setKeyStatus(id, state) {
+  // state: 'checking' | 'ok' | 'error' | 'none'
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (state === 'none') { el.style.display = 'none'; return; }
+  el.style.display = 'inline';
+  if (state === 'checking') { el.textContent = '⏳'; el.title = 'Проверка...'; }
+  else if (state === 'ok')  { el.textContent = '🟢'; el.title = 'Ключ рабочий'; }
+  else                       { el.textContent = '🔴'; el.title = 'Ключ не работает'; }
+}
+
+function updateHeaderDot() {
+  const oai = localStorage.getItem('openai_api_key');
+  const orr = localStorage.getItem('openrouter_api_key');
+  const kie = localStorage.getItem('kie_api_key');
+  const dot = document.getElementById('api-health-dot');
+  if (!dot) return;
+  const checks = JSON.parse(localStorage.getItem('api_key_status') || '{}');
+  const hasAny = oai || orr || kie;
+  if (!hasAny) { dot.style.background = '#6b7280'; dot.title = 'API ключи не настроены'; return; }
+  const statuses = Object.values(checks);
+  const allOk = statuses.length > 0 && statuses.every(s => s === 'ok');
+  const anyError = statuses.some(s => s === 'error');
+  dot.style.background = allOk ? '#22c55e' : anyError ? '#ef4444' : '#f59e0b';
+  dot.title = allOk ? 'Все API ключи рабочие' : anyError ? 'Есть проблемные ключи' : 'Проверка ключей...';
+}
+
+async function runKeyChecks() {
+  const oai = localStorage.getItem('openai_api_key');
+  const orr = localStorage.getItem('openrouter_api_key');
+  const kie = localStorage.getItem('kie_api_key');
+  const saved = JSON.parse(localStorage.getItem('api_key_status') || '{}');
+
+  const tasks = [];
+  if (oai) { setKeyStatus('status-openai', 'checking'); tasks.push(checkOpenAIKey(oai).then(r => { const s = r.ok?'ok':'error'; saved.openai=s; setKeyStatus('status-openai', s); })); }
+  else { setKeyStatus('status-openai', 'none'); }
+  if (orr) { setKeyStatus('status-openrouter', 'checking'); tasks.push(checkOpenRouterKey(orr).then(r => { const s = r.ok?'ok':'error'; saved.openrouter=s; setKeyStatus('status-openrouter', s); })); }
+  else { setKeyStatus('status-openrouter', 'none'); }
+  if (kie) { setKeyStatus('status-kie', 'checking'); tasks.push(checkKieKey(kie).then(r => { const s = r.ok?'ok':'error'; saved.kie=s; setKeyStatus('status-kie', s); })); }
+  else { setKeyStatus('status-kie', 'none'); }
+
+  await Promise.all(tasks);
+  localStorage.setItem('api_key_status', JSON.stringify(saved));
+  updateHeaderDot();
+}
+
 function openApiSettings() {
   document.getElementById('modal-api-settings').style.display = 'flex';
   document.getElementById('api-settings-msg').style.display = 'none';
   const oai = localStorage.getItem('openai_api_key');
   const orr = localStorage.getItem('openrouter_api_key');
   const kie = localStorage.getItem('kie_api_key');
+  const ant = localStorage.getItem('anthropic_api_key');
   if (oai) document.getElementById('api-key-openai').placeholder = oai.slice(0,8) + '••••••••';
   if (orr) document.getElementById('api-key-openrouter').placeholder = orr.slice(0,10) + '••••••••';
   if (kie) document.getElementById('api-key-kie').placeholder = kie.slice(0,8) + '••••••••';
+  if (ant) document.getElementById('api-key-anthropic').placeholder = ant.slice(0,12) + '••••••••';
+  // Показать сохранённые статусы сразу, потом перепроверить
+  const saved = JSON.parse(localStorage.getItem('api_key_status') || '{}');
+  if (oai) setKeyStatus('status-openai', saved.openai || 'checking');
+  if (orr) setKeyStatus('status-openrouter', saved.openrouter || 'checking');
+  if (kie) setKeyStatus('status-kie', saved.kie || 'checking');
+  runKeyChecks();
 }
+
 function closeApiSettings() {
   document.getElementById('modal-api-settings').style.display = 'none';
-  ['api-key-openai','api-key-openrouter','api-key-kie'].forEach(id => {
+  ['api-key-openai','api-key-openrouter','api-key-kie','api-key-anthropic'].forEach(id => {
     const el = document.getElementById(id);
-    el.value = '';
-    el.type = 'password';
+    if (el) { el.value = ''; el.type = 'password'; }
   });
 }
+
 function toggleApiKeyVisibility(inputId) {
   const inp = document.getElementById(inputId);
   inp.type = inp.type === 'password' ? 'text' : 'password';
 }
-function saveApiSettings() {
+
+async function saveApiSettings() {
   const openaiKey = document.getElementById('api-key-openai').value.trim();
   const openrouterKey = document.getElementById('api-key-openrouter').value.trim();
   const kieKey = document.getElementById('api-key-kie').value.trim();
@@ -598,18 +2029,37 @@ function saveApiSettings() {
     msg.textContent = '⚠️ Введите хотя бы один ключ';
     return;
   }
+  const anthropicKey = document.getElementById('api-key-anthropic').value.trim();
   const saved = [];
   if (openaiKey) { localStorage.setItem('openai_api_key', openaiKey); saved.push('ChatGPT'); }
   if (openrouterKey) { localStorage.setItem('openrouter_api_key', openrouterKey); saved.push('OpenRouter'); }
   if (kieKey) { localStorage.setItem('kie_api_key', kieKey); saved.push('KIE.ai'); }
+  if (anthropicKey) { localStorage.setItem('anthropic_api_key', anthropicKey); saved.push('Claude'); }
 
   msg.style.display = 'block';
   msg.style.background = 'rgba(34,197,94,0.1)';
   msg.style.border = '1px solid rgba(34,197,94,0.3)';
   msg.style.color = '#22c55e';
+  msg.textContent = '✅ Сохранено: ' + saved.join(', ') + ' — проверяю ключи...';
+
+  // Сбросить старые статусы для новых ключей и перепроверить
+  const statuses = JSON.parse(localStorage.getItem('api_key_status') || '{}');
+  if (openaiKey) delete statuses.openai;
+  if (openrouterKey) delete statuses.openrouter;
+  if (kieKey) delete statuses.kie;
+  localStorage.setItem('api_key_status', JSON.stringify(statuses));
+
+  await runKeyChecks();
   msg.textContent = '✅ Сохранено: ' + saved.join(', ');
-  setTimeout(closeApiSettings, 1500);
+  setTimeout(closeApiSettings, 1200);
 }
+
+// Проверка при загрузке страницы
+document.addEventListener('DOMContentLoaded', () => {
+  updateHeaderDot();
+  // Тихая фоновая проверка через 2 сек после загрузки
+  setTimeout(runKeyChecks, 2000);
+});
 </script>
 
 <!-- ═══════ API Settings Modal ═══════ -->
@@ -628,7 +2078,10 @@ function saveApiSettings() {
           <input id="api-key-openai" type="password" placeholder="sk-..." style="flex:1;background:#252840;border:1px solid #2a2d3e;border-radius:6px;color:#e2e8f0;padding:10px 12px;font-size:13px;font-family:monospace;outline:none;" onfocus="this.style.borderColor='#6c63ff'" onblur="this.style.borderColor='#2a2d3e'">
           <button onclick="toggleApiKeyVisibility('api-key-openai')" style="background:#252840;border:1px solid #2a2d3e;border-radius:6px;padding:8px 11px;cursor:pointer;color:#8892a4;font-size:14px;" title="Показать/скрыть">👁</button>
         </div>
-        <div style="font-size:11px;color:#8892a4;margin-top:5px;">💡 <a href="https://platform.openai.com/api-keys" target="_blank" style="color:#6c63ff;text-decoration:none;">platform.openai.com/api-keys</a></div>
+        <div style="font-size:11px;color:#8892a4;margin-top:5px;display:flex;align-items:center;gap:6px;">
+          <span id="status-openai" style="display:none;font-size:13px;" title=""></span>
+          <span>💡 <a href="https://platform.openai.com/api-keys" target="_blank" style="color:#6c63ff;text-decoration:none;">platform.openai.com/api-keys</a></span>
+        </div>
       </div>
 
       <!-- OpenRouter -->
@@ -638,7 +2091,10 @@ function saveApiSettings() {
           <input id="api-key-openrouter" type="password" placeholder="sk-or-..." style="flex:1;background:#252840;border:1px solid #2a2d3e;border-radius:6px;color:#e2e8f0;padding:10px 12px;font-size:13px;font-family:monospace;outline:none;" onfocus="this.style.borderColor='#6c63ff'" onblur="this.style.borderColor='#2a2d3e'">
           <button onclick="toggleApiKeyVisibility('api-key-openrouter')" style="background:#252840;border:1px solid #2a2d3e;border-radius:6px;padding:8px 11px;cursor:pointer;color:#8892a4;font-size:14px;" title="Показать/скрыть">👁</button>
         </div>
-        <div style="font-size:11px;color:#8892a4;margin-top:5px;">💡 <a href="https://openrouter.ai/keys" target="_blank" style="color:#6c63ff;text-decoration:none;">openrouter.ai/keys</a></div>
+        <div style="font-size:11px;color:#8892a4;margin-top:5px;display:flex;align-items:center;gap:6px;">
+          <span id="status-openrouter" style="display:none;font-size:13px;" title=""></span>
+          <span>💡 <a href="https://openrouter.ai/keys" target="_blank" style="color:#6c63ff;text-decoration:none;">openrouter.ai/keys</a></span>
+        </div>
       </div>
 
       <!-- KIE.ai -->
@@ -648,7 +2104,22 @@ function saveApiSettings() {
           <input id="api-key-kie" type="password" placeholder="Ваш KIE_AI_API_KEY" style="flex:1;background:#252840;border:1px solid #2a2d3e;border-radius:6px;color:#e2e8f0;padding:10px 12px;font-size:13px;font-family:monospace;outline:none;" onfocus="this.style.borderColor='#6c63ff'" onblur="this.style.borderColor='#2a2d3e'">
           <button onclick="toggleApiKeyVisibility('api-key-kie')" style="background:#252840;border:1px solid #2a2d3e;border-radius:6px;padding:8px 11px;cursor:pointer;color:#8892a4;font-size:14px;" title="Показать/скрыть">👁</button>
         </div>
-        <div style="font-size:11px;color:#8892a4;margin-top:5px;">💡 <a href="https://kie.ai/api-key" target="_blank" style="color:#6c63ff;text-decoration:none;">kie.ai/api-key</a></div>
+        <div style="font-size:11px;color:#8892a4;margin-top:5px;display:flex;align-items:center;gap:6px;">
+          <span id="status-kie" style="display:none;font-size:13px;" title=""></span>
+          <span>💡 <a href="https://kie.ai/api-key" target="_blank" style="color:#6c63ff;text-decoration:none;">kie.ai/api-key</a></span>
+        </div>
+      </div>
+
+      <!-- Anthropic (Claude) -->
+      <div>
+        <label style="font-size:11px;font-weight:700;color:#8892a4;text-transform:uppercase;letter-spacing:0.07em;display:block;margin-bottom:7px;">🤖 Anthropic Claude <span style="color:#f59e0b;font-size:10px;font-weight:600;">(для улучшения промтов)</span></label>
+        <div style="display:flex;gap:8px;">
+          <input id="api-key-anthropic" type="password" placeholder="sk-ant-..." style="flex:1;background:#252840;border:1px solid #2a2d3e;border-radius:6px;color:#e2e8f0;padding:10px 12px;font-size:13px;font-family:monospace;outline:none;" onfocus="this.style.borderColor='#6c63ff'" onblur="this.style.borderColor='#2a2d3e'">
+          <button onclick="toggleApiKeyVisibility('api-key-anthropic')" style="background:#252840;border:1px solid #2a2d3e;border-radius:6px;padding:8px 11px;cursor:pointer;color:#8892a4;font-size:14px;" title="Показать/скрыть">👁</button>
+        </div>
+        <div style="font-size:11px;color:#8892a4;margin-top:5px;">
+          💡 <a href="https://console.anthropic.com/keys" target="_blank" style="color:#6c63ff;text-decoration:none;">console.anthropic.com/keys</a>
+        </div>
       </div>
 
       <div id="api-settings-msg" style="display:none;padding:10px 12px;border-radius:6px;font-size:12px;font-weight:600;"></div>
@@ -657,6 +2128,40 @@ function saveApiSettings() {
         <button onclick="saveApiSettings()" style="flex:1;background:#6c63ff;color:#fff;border:none;border-radius:6px;padding:11px;font-weight:700;cursor:pointer;font-size:13px;transition:background 0.15s;" onmouseover="this.style.background='#7d75ff'" onmouseout="this.style.background='#6c63ff'">💾 Сохранить</button>
         <button onclick="closeApiSettings()" style="padding:11px 18px;background:#252840;color:#e2e8f0;border:1px solid #2a2d3e;border-radius:6px;font-weight:600;cursor:pointer;font-size:13px;">Отмена</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Библиотека референсов ── -->
+<div id="modal-vref" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:3000;align-items:center;justify-content:center;">
+  <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:16px;width:700px;max-width:95vw;max-height:85vh;display:flex;flex-direction:column;overflow:hidden;">
+    <!-- Header -->
+    <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+      <div>
+        <div style="font-size:15px;font-weight:700;color:var(--text);">📁 Библиотека референсов</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:2px;" id="vref-proj-label"></div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button onclick="document.getElementById('vref-upload-input').click()" style="background:var(--accent);color:#fff;border:none;border-radius:7px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;">+ Добавить</button>
+        <input type="file" id="vref-upload-input" accept="image/*" multiple style="display:none;" onchange="vrefUpload(event)">
+        <button onclick="vrefClose()" style="background:none;border:none;color:var(--text-muted);font-size:20px;cursor:pointer;line-height:1;">×</button>
+      </div>
+    </div>
+    <!-- Hint (pick mode) -->
+    <div id="vref-pick-hint" style="padding:8px 20px;background:rgba(108,99,255,0.1);border-bottom:1px solid var(--border);font-size:12px;color:var(--accent);display:none;">
+      Кликните на изображение чтобы выбрать его как референс
+    </div>
+    <!-- Grid -->
+    <div id="vref-grid" style="flex:1;overflow-y:auto;padding:16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;">
+      <div id="vref-empty" style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text-muted);font-size:13px;">
+        <div style="font-size:32px;margin-bottom:8px;opacity:0.3;">🖼</div>
+        Нет изображений. Добавьте первое!
+      </div>
+    </div>
+    <!-- Footer -->
+    <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
+      <span id="vref-count" style="font-size:12px;color:var(--text-muted);">0 изображений</span>
+      <button onclick="vrefClose()" style="background:var(--card-bg);border:1px solid var(--border);border-radius:7px;padding:7px 16px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer;">Закрыть</button>
     </div>
   </div>
 </div>
