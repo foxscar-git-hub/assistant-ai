@@ -122,6 +122,24 @@ app.post('/api/kie/save-key', async (req, res) => {
   }
 });
 
+// ── Shared: загрузка base64 на KIE, возвращает URL ──
+async function kieUploadBase64(base64, reqKey, filename = 'image.jpg') {
+  const buf = Buffer.from(base64.replace(/^data:[^;]+;base64,/, ''), 'base64');
+  // Use native fetch FormData (Node 18+) — FormData sets multipart boundary automatically
+  const { Blob } = require('buffer');
+  const blob = new Blob([buf], { type: 'image/jpeg' });
+  const form = new FormData();
+  form.append('file', blob, filename);
+  const r = await fetch(KIE_BASE + '/upload', {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer ' + reqKey },
+    body: form
+  });
+  const data = await r.json();
+  if (data?.data?.url) return data.data.url;
+  throw new Error(data?.msg || JSON.stringify(data));
+}
+
 // ── KIE: загрузка изображения (base64 → URL через KIE) ──
 app.post('/api/kie/upload-image', async (req, res) => {
   const { base64, filename = 'image.jpg' } = req.body || {};
@@ -129,18 +147,8 @@ app.post('/api/kie/upload-image', async (req, res) => {
   const reqKey = req.headers['x-kie-key'] || kieKey();
   if (!reqKey) return res.json({ ok: false, error: 'KIE API ключ не задан' });
   try {
-    const { FormData, File } = await import('formdata-node');
-    const buf = Buffer.from(base64.replace(/^data:[^;]+;base64,/, ''), 'base64');
-    const form = new FormData();
-    form.set('file', new File([buf], filename, { type: 'image/jpeg' }));
-    const r = await fetch(KIE_BASE + '/upload', {
-      method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + reqKey },
-      body: form
-    });
-    const data = await r.json();
-    if (data?.data?.url) return res.json({ ok: true, url: data.data.url });
-    res.json({ ok: false, error: data?.msg || 'Ошибка загрузки' });
+    const url = await kieUploadBase64(base64, reqKey, filename);
+    return res.json({ ok: true, url });
   } catch (e) {
     res.json({ ok: false, error: e.message });
   }
@@ -193,42 +201,73 @@ Output ONLY the description, no intro phrases.`
   }
 });
 
-// ── KIE gpt-image-2: апскейл / мультиракурс через image-to-image ──
-async function kieImageToImage(imageUrl, prompt, kieApiKey, resolution = '2K') {
-  const data = await kiePost('/jobs/createTask', {
-    model: 'gpt-image-2-image-to-image',
-    input: { prompt, input_urls: [imageUrl], resolution, aspect_ratio: '1:1' }
-  }, kieApiKey);
-  return data;
+// ── OpenAI image editing: апскейл / мультиракурс ──
+const VREF_PROCESSED_DIR = path.join(__dirname, 'data', 'vref-processed');
+if (!fs.existsSync(VREF_PROCESSED_DIR)) fs.mkdirSync(VREF_PROCESSED_DIR, { recursive: true });
+app.use('/vref-processed/', express.static(VREF_PROCESSED_DIR));
+
+async function openaiImageEdit(base64, prompt, openaiKey, size = '1024x1024') {
+  const { Blob } = require('buffer');
+  // Detect actual mime type from data URI
+  const mimeMatch = base64.match(/^data:([^;]+);base64,/);
+  const mime = mimeMatch?.[1] || 'image/jpeg';
+  const ext = mime.includes('png') ? 'png' : mime.includes('webp') ? 'webp' : 'jpg';
+  const buf = Buffer.from(base64.replace(/^data:[^;]+;base64,/, ''), 'base64');
+
+  // OpenAI edits API requires image < 4MB
+  if (buf.length > 3.9 * 1024 * 1024) throw new Error('Изображение слишком большое (>4MB). Сожмите перед обработкой.');
+
+  const blob = new Blob([buf], { type: mime });
+  const form = new FormData();
+  form.append('image', blob, 'image.' + ext);
+  form.append('prompt', prompt);
+  form.append('model', 'gpt-image-1');
+  form.append('n', '1');
+  form.append('size', size);
+  form.append('response_format', 'b64_json');
+  let r = await fetch('https://api.openai.com/v1/images/edits', {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer ' + openaiKey },
+    body: form
+  });
+  let data = await r.json();
+  // Fallback to dall-e-2 if gpt-image-1 unavailable
+  if (data.error && (data.error.code === 'model_not_found' || data.error.status === 404 || r.status >= 500)) {
+    const form2 = new FormData();
+    form2.append('image', blob, 'image.' + ext);
+    form2.append('prompt', prompt.slice(0, 1000));
+    form2.append('model', 'dall-e-2');
+    form2.append('n', '1');
+    form2.append('size', '1024x1024');
+    form2.append('response_format', 'b64_json');
+    r = await fetch('https://api.openai.com/v1/images/edits', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + openaiKey },
+      body: form2
+    });
+    data = await r.json();
+  }
+  if (data.error) throw new Error(data.error.message);
+  const b64 = data.data?.[0]?.b64_json;
+  if (!b64) throw new Error('Нет данных изображения в ответе: ' + JSON.stringify(data).slice(0, 200));
+  const filename = Date.now() + '_' + Math.random().toString(36).slice(2) + '.png';
+  fs.writeFileSync(path.join(VREF_PROCESSED_DIR, filename), Buffer.from(b64, 'base64'));
+  return '/vref-processed/' + filename;
 }
 
 app.post('/api/kie/upscale-image', async (req, res) => {
   try {
-    const { base64, kieKey: clientKieKey } = req.body || {};
-    const reqKey = clientKieKey || req.headers['x-kie-key'] || kieKey();
+    const { base64, openaiKey: clientOpenaiKey } = req.body || {};
+    const openaiKey = clientOpenaiKey || process.env.OPENAI_API_KEY || '';
     if (!base64) return res.json({ ok: false, error: 'base64 не передан' });
-    if (!reqKey) return res.json({ ok: false, error: 'KIE ключ не задан' });
+    if (!openaiKey) return res.json({ ok: false, error: 'Нужен OpenAI API ключ в настройках' });
 
-    // Upload image first
-    const { FormData, File } = await import('formdata-node');
-    const buf = Buffer.from(base64.replace(/^data:[^;]+;base64,/, ''), 'base64');
-    const form = new FormData();
-    form.set('file', new File([buf], 'image.jpg', { type: 'image/jpeg' }));
-    const upRes = await fetch(KIE_BASE + '/upload', {
-      method: 'POST', headers: { 'Authorization': 'Bearer ' + reqKey }, body: form
-    });
-    const upData = await upRes.json();
-    if (!upData?.data?.url) return res.json({ ok: false, error: upData?.msg || 'Ошибка загрузки' });
-    const imageUrl = upData.data.url;
-
-    // Create upscale task
-    const data = await kieImageToImage(
-      imageUrl,
-      'Upscale this image to maximum quality. Preserve every detail exactly as in the original — colors, textures, composition, subject. Sharpen, enhance clarity and resolution. Do not change anything about the subject.',
-      reqKey, '2K'
+    const url = await openaiImageEdit(
+      base64,
+      'Upscale and enhance this product image to maximum quality. Preserve every detail exactly — colors, textures, patterns, logos, composition. Make it sharper and cleaner. Do not change or add anything.',
+      openaiKey, '1024x1024'
     );
-    if (!data?.data?.taskId) return res.json({ ok: false, error: data?.msg || JSON.stringify(data) });
-    res.json({ ok: true, taskId: data.data.taskId });
+    res.json({ ok: true, url });
   } catch (e) {
     res.json({ ok: false, error: e.message });
   }
@@ -236,49 +275,20 @@ app.post('/api/kie/upscale-image', async (req, res) => {
 
 app.post('/api/kie/multiangle-image', async (req, res) => {
   try {
-    const { base64, kieKey: clientKieKey, productDescription = '' } = req.body || {};
-    const reqKey = clientKieKey || req.headers['x-kie-key'] || kieKey();
+    const { base64, openaiKey: clientOpenaiKey, productDescription = '' } = req.body || {};
+    const openaiKey = clientOpenaiKey || process.env.OPENAI_API_KEY || '';
     if (!base64) return res.json({ ok: false, error: 'base64 не передан' });
-    if (!reqKey) return res.json({ ok: false, error: 'KIE ключ не задан' });
+    if (!openaiKey) return res.json({ ok: false, error: 'Нужен OpenAI API ключ в настройках' });
 
-    const { FormData, File } = await import('formdata-node');
-    const buf = Buffer.from(base64.replace(/^data:[^;]+;base64,/, ''), 'base64');
-    const form = new FormData();
-    form.set('file', new File([buf], 'image.jpg', { type: 'image/jpeg' }));
-    const upRes = await fetch(KIE_BASE + '/upload', {
-      method: 'POST', headers: { 'Authorization': 'Bearer ' + reqKey }, body: form
-    });
-    const upData = await upRes.json();
-    if (!upData?.data?.url) return res.json({ ok: false, error: upData?.msg || 'Ошибка загрузки' });
-
-    const desc = productDescription ? ` Product: ${productDescription.slice(0, 200)}.` : '';
-    const data = await kieImageToImage(
-      upData.data.url,
-      `Product reference sheet showing this exact product from 4 angles: front view top-left, side view top-right, back view bottom-left, 45-degree angle bottom-right. Clean white background, professional studio lighting, product photography.${desc} Preserve all product details, colors, textures, logos exactly as shown.`,
-      reqKey, '2K'
+    const desc = productDescription ? ` Product details: ${productDescription.slice(0, 300)}.` : '';
+    const url = await openaiImageEdit(
+      base64,
+      `Create a product reference sheet showing this exact product from 4 angles arranged in a 2x2 grid: front view (top-left), right side view (top-right), back view (bottom-left), 45-degree angle view (bottom-right). Clean white background, professional studio lighting, product photography style.${desc} Preserve all product details, colors, textures, logos exactly.`,
+      openaiKey, '1024x1024'
     );
-    if (!data?.data?.taskId) return res.json({ ok: false, error: data?.msg || JSON.stringify(data) });
-    res.json({ ok: true, taskId: data.data.taskId });
+    res.json({ ok: true, url });
   } catch (e) {
     res.json({ ok: false, error: e.message });
-  }
-});
-
-// ── KIE image task status (для upscale/multiangle) ──
-app.get('/api/kie/image-status/:taskId', async (req, res) => {
-  try {
-    const reqKey = req.headers['x-kie-key'] || kieKey();
-    const data = await kieGet('/jobs/recordInfo?taskId=' + req.params.taskId, reqKey);
-    const task = data.data || data;
-    if (task.state === 'success') {
-      let urls = [];
-      try { urls = JSON.parse(task.resultJson || '{}').resultUrls || []; } catch {}
-      return res.json({ status: 'success', url: urls[0] || '', urls });
-    }
-    if (task.state === 'fail') return res.json({ status: 'failed', error: task.failMsg || 'Ошибка' });
-    res.json({ status: 'pending', state: task.state });
-  } catch (e) {
-    res.json({ status: 'error', error: e.message });
   }
 });
 

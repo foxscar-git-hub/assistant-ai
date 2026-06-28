@@ -2205,13 +2205,13 @@ async function vgenAnalyzeImage() {
   }
 }
 
-// ── KIE Image processing: апскейл и мультиракурс ──
+// ── Image processing: апскейл и мультиракурс через OpenAI gpt-image-1 ──
 async function vrefKieProcess(imgId, type) {
   const images = vrefGetImages();
   const img = images.find(i => i.id === imgId);
   if (!img) return;
-  const kieApiKey = localStorage.getItem('kie_api_key') || '';
-  if (!kieApiKey) { alert('Нужен KIE API ключ в ⚙️ Настройках'); return; }
+  const openaiKey = localStorage.getItem('openai_api_key') || '';
+  if (!openaiKey) { alert('Нужен OpenAI API ключ в ⚙️ Настройках для апскейла/мультиракурса'); return; }
 
   const endpoint = type === 'upscale' ? '/api/kie/upscale-image' : '/api/kie/multiangle-image';
   const btnId = `vref-${type}-${imgId}`;
@@ -2219,7 +2219,7 @@ async function vrefKieProcess(imgId, type) {
   if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
 
   try {
-    const body = { base64: img.data, kieKey: kieApiKey };
+    const body = { base64: img.data, openaiKey };
     if (type === 'multiangle' && img.description) body.productDescription = img.description;
 
     const r = await fetch(endpoint, {
@@ -2227,53 +2227,27 @@ async function vrefKieProcess(imgId, type) {
       body: JSON.stringify(body)
     });
     const d = await r.json();
-    if (!d.ok || !d.taskId) {
-      if (btn) { btn.textContent = type === 'upscale' ? '⬆️ Апскейл' : '📐 Ракурс'; btn.disabled = false; }
+    if (!d.ok || !d.url) {
+      if (btn) { btn.textContent = type === 'upscale' ? '⬆️' : '📐'; btn.disabled = false; }
       alert('Ошибка: ' + (d.error || 'неизвестно')); return;
     }
 
-    // Poll for result
-    if (btn) btn.textContent = '⏳ …';
-    let attempt = 0;
-    const poll = async () => {
-      attempt++;
-      const sr = await fetch('/api/kie/image-status/' + d.taskId, {
-        headers: { 'x-kie-key': kieApiKey }
-      });
-      const sd = await sr.json();
-      if (sd.status === 'success' && sd.url) {
-        // Fetch result image as base64 and save to library
-        const imgR = await fetch(sd.url);
-        const blob = await imgR.blob();
-        const reader = new FileReader();
-        reader.onload = e => {
-          const newImg = {
-            id: Date.now() + Math.random(),
-            name: (type === 'upscale' ? '⬆️ ' : '📐 ') + img.name,
-            data: e.target.result,
-            added: Date.now(),
-            badge: type === 'upscale' ? 'upscaled' : 'multiangle',
-            sourceId: imgId,
-          };
-          const imgs = vrefGetImages();
-          imgs.unshift(newImg);
-          vrefSaveImages(imgs);
-          vrefRender();
-          if (btn) { btn.textContent = '✓ Сохранено'; setTimeout(() => { btn.textContent = type === 'upscale' ? '⬆️ Апскейл' : '📐 Ракурс'; btn.disabled = false; }, 2500); }
-        };
-        reader.readAsDataURL(blob);
-      } else if (sd.status === 'failed') {
-        if (btn) { btn.textContent = type === 'upscale' ? '⬆️ Апскейл' : '📐 Ракурс'; btn.disabled = false; }
-        alert('Обработка не удалась: ' + (sd.error || ''));
-      } else if (attempt < 60) {
-        setTimeout(poll, 5000);
-      } else {
-        if (btn) { btn.textContent = type === 'upscale' ? '⬆️ Апскейл' : '📐 Ракурс'; btn.disabled = false; }
-      }
+    // Save result to library — store server URL, not base64 (avoids localStorage quota)
+    const newImg = {
+      id: Date.now() + Math.random(),
+      name: (type === 'upscale' ? '⬆️ ' : '📐 ') + img.name,
+      data: d.url,
+      added: Date.now(),
+      badge: type === 'upscale' ? 'upscaled' : 'multiangle',
+      sourceId: imgId,
     };
-    setTimeout(poll, 5000);
+    const imgs = vrefGetImages();
+    imgs.unshift(newImg);
+    vrefSaveImages(imgs);
+    vrefRender();
+    if (btn) { btn.textContent = '✓'; setTimeout(() => { btn.textContent = type === 'upscale' ? '⬆️' : '📐'; btn.disabled = false; }, 2500); }
   } catch (e) {
-    if (btn) { btn.textContent = type === 'upscale' ? '⬆️ Апскейл' : '📐 Ракурс'; btn.disabled = false; }
+    if (btn) { btn.textContent = type === 'upscale' ? '⬆️' : '📐'; btn.disabled = false; }
     alert('Ошибка: ' + e.message);
   }
 }
