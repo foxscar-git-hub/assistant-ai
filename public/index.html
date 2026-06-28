@@ -395,7 +395,40 @@
   /* Video tab panels — override display when active */
   #vtab-generate { display: none; }
   #vtab-generate.active { display: flex !important; flex-direction: column; flex: 1; overflow: hidden; padding: 0; }
-  #vtab-generate.active > div { flex: 1; overflow: hidden; }
+  #vtab-generate.active > .vgen-main-row { flex: 1; overflow: hidden; }
+
+  /* Video history strip */
+  #vgen-history-strip {
+    height: 110px; min-height: 110px; border-top: 1px solid var(--border);
+    background: var(--card-bg); display: flex; align-items: center;
+    gap: 8px; padding: 8px 12px; overflow-x: auto; overflow-y: hidden;
+    scrollbar-width: thin;
+  }
+  #vgen-history-strip:empty::after {
+    content: 'История генераций появится здесь';
+    color: var(--text-muted); font-size: 12px; white-space: nowrap; margin: auto;
+  }
+  .vgen-hist-item {
+    position: relative; flex: 0 0 auto; width: 84px; height: 90px;
+    border-radius: 8px; overflow: hidden; cursor: pointer;
+    border: 2px solid transparent; transition: border-color 0.15s, transform 0.1s;
+    background: #1a1b2e;
+  }
+  .vgen-hist-item:hover { border-color: var(--accent); transform: translateY(-2px); }
+  .vgen-hist-item video { width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
+  .vgen-hist-item .vgen-hist-badge {
+    position: absolute; bottom: 3px; left: 3px; right: 3px;
+    background: rgba(0,0,0,0.7); border-radius: 4px; padding: 2px 4px;
+    font-size: 9px; color: #fff; text-align: center; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis;
+  }
+  .vgen-hist-item .vgen-hist-del {
+    position: absolute; top: 3px; right: 3px; width: 16px; height: 16px;
+    background: rgba(0,0,0,0.6); border: none; border-radius: 50%; color: #fff;
+    font-size: 9px; cursor: pointer; display: none; align-items: center; justify-content: center;
+    line-height: 1;
+  }
+  .vgen-hist-item:hover .vgen-hist-del { display: flex; }
   #vtab-logs { display: none; }
   #vtab-logs.active { display: flex !important; flex-direction: column; flex: 1; overflow: hidden; padding: 0; }
 
@@ -675,7 +708,7 @@
 
             <!-- Генерация -->
             <div class="vtab-panel active" id="vtab-generate" style="padding:0;">
-              <div style="display:flex;height:100%;overflow:hidden;">
+              <div class="vgen-main-row" style="display:flex;overflow:hidden;">
 
                 <!-- Input колонка -->
                 <div style="width:400px;min-width:340px;border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;">
@@ -833,6 +866,8 @@
                 </div>
 
               </div>
+              <!-- History strip — лента сгенерированных видео -->
+              <div id="vgen-history-strip"></div>
             </div>
 
             <!-- Монтаж -->
@@ -1433,7 +1468,101 @@ function vrefRender() {
 const _origVprojSelect = window.vprojSelect;
 
 // ── Video Generation ──
-const vgenState = { firstImageUrl: null, lastImageUrl: null, pollTimer: null };
+const vgenState = { firstImageUrl: null, lastImageUrl: null, pollTimer: null, lastParams: null };
+
+// ═══ Video Generation History ═══
+const VGEN_HIST_KEY = 'vgen_history';
+const VGEN_HIST_MAX = 50;
+
+function vgenHistoryLoad() {
+  try { return JSON.parse(localStorage.getItem(VGEN_HIST_KEY) || '[]'); } catch { return []; }
+}
+function vgenHistorySave(entry) {
+  const list = vgenHistoryLoad();
+  list.unshift(entry);
+  if (list.length > VGEN_HIST_MAX) list.length = VGEN_HIST_MAX;
+  localStorage.setItem(VGEN_HIST_KEY, JSON.stringify(list));
+  vgenHistoryRender();
+}
+function vgenHistoryDelete(idx) {
+  const list = vgenHistoryLoad();
+  list.splice(idx, 1);
+  localStorage.setItem(VGEN_HIST_KEY, JSON.stringify(list));
+  vgenHistoryRender();
+}
+
+function vgenHistoryRender() {
+  const strip = document.getElementById('vgen-history-strip');
+  if (!strip) return;
+  const list = vgenHistoryLoad();
+  if (!list.length) { strip.innerHTML = ''; return; }
+  strip.innerHTML = list.map((item, i) => `
+    <div class="vgen-hist-item" onclick="vgenHistoryRestore(${i})" title="${(item.prompt||'').replace(/"/g,'&quot;').slice(0,120)}">
+      <video src="${item.url}" muted preload="metadata" loop
+        onmouseenter="this.play()" onmouseleave="this.pause();this.currentTime=0"></video>
+      <div class="vgen-hist-badge">${item.model||''}${item.duration ? ' · '+item.duration+'s' : ''}</div>
+      <button class="vgen-hist-del" onclick="event.stopPropagation();vgenHistoryDelete(${i})" title="Удалить">✕</button>
+    </div>`).join('');
+}
+
+function vgenHistoryRestore(idx) {
+  const item = vgenHistoryLoad()[idx];
+  if (!item) return;
+
+  // Restore model tab
+  if (item.model) {
+    vgenSelectModel(item.model);
+    document.querySelectorAll('.vgen-model-tab').forEach(t => {
+      t.classList.toggle('active', t.dataset.model === item.model);
+    });
+  }
+  // Restore format
+  if (item.format) {
+    document.querySelectorAll('input[name="vgen-format"]').forEach(r => {
+      r.checked = r.value === item.format;
+    });
+    document.querySelectorAll('.vgen-fmt-btn').forEach(b => {
+      b.classList.toggle('active', b.querySelector('input')?.value === item.format);
+    });
+  }
+  // Restore prompt
+  const promptEl = document.getElementById('vgen-prompt');
+  if (promptEl && item.prompt) promptEl.value = item.prompt;
+
+  // Restore duration
+  const slider = document.getElementById('vgen-dur-slider');
+  if (slider && item.duration) {
+    slider.value = item.duration;
+    const label = document.getElementById('vgen-dur-val');
+    if (label) label.textContent = item.duration + 's';
+  }
+  // Restore aspect ratio
+  if (item.aspect_ratio) {
+    document.querySelectorAll('input[name="vgen-ratio"]').forEach(r => r.checked = r.value === item.aspect_ratio);
+    document.querySelectorAll('.vgen-ratio-btn[data-val]').forEach(b => {
+      b.classList.toggle('active', b.dataset.val === item.aspect_ratio);
+    });
+  }
+  // Restore resolution
+  if (item.resolution) {
+    document.querySelectorAll('input[name="vgen-res"]').forEach(r => r.checked = r.value === item.resolution);
+    document.querySelectorAll('#vgen-res-row .vgen-ratio-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.val === item.resolution);
+    });
+  }
+  // Restore submodel (quality)
+  if (item.quality) {
+    document.querySelectorAll('input[name="vgen-qual"]').forEach(r => r.checked = r.value === item.quality);
+    document.querySelectorAll('.vgen-ratio-btn[data-subval]').forEach(b => {
+      b.classList.toggle('active', b.dataset.subval === item.quality);
+    });
+  }
+
+  // Scroll into view and flash
+  promptEl?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  promptEl && (promptEl.style.borderColor = 'var(--accent)');
+  setTimeout(() => { if (promptEl) promptEl.style.borderColor = 'var(--border)'; }, 1500);
+}
 
 // Radio pill selection
 document.addEventListener('DOMContentLoaded', () => {
@@ -1676,6 +1805,16 @@ function vgenAnimateProgress(pct) {
 }
 
 function vgenShowResult(url, credits, costTime) {
+  // Save to history
+  if (url && vgenState.lastParams) {
+    vgenHistorySave({
+      ...vgenState.lastParams,
+      url,
+      credits: credits || null,
+      costTime: costTime || null,
+      createdAt: new Date().toISOString(),
+    });
+  }
   const card = document.getElementById('vgen-progress-card');
   if (card) card.remove();
   const ph = document.getElementById('vgen-output-placeholder');
@@ -1794,6 +1933,9 @@ async function vgenRun() {
   const quality = vgenGetParam('vgen-qual') === 'pro' ? 'pro' : 'fast';
   const resolution = vgenGetParam('vgen-res') || '720p';
   const model = vgenActiveModel || 'seedance';
+  const format = document.querySelector('input[name="vgen-format"]:checked')?.value || 'cinematic';
+  // Save all params for history
+  vgenState.lastParams = { prompt, model, format, duration, aspect_ratio, resolution, quality };
 
   const msg = document.getElementById('vgen-progress-msg');
   if (msg) msg.textContent = 'Создание задачи генерации...';
@@ -1828,6 +1970,7 @@ async function vgenRun() {
 // Init on page open
 document.addEventListener('DOMContentLoaded', () => {
   vprojRender();
+  vgenHistoryRender();
 });
 
 // ═══════ Drag & Drop nav items between blocks ═══════
