@@ -282,7 +282,7 @@ app.post('/api/videogen', async (req, res) => {
     else if (modelType === 'omni') modelId = MODEL_IDS.omni_video;
     else modelId = quality === 'pro' ? MODEL_IDS.seedance_pro : MODEL_IDS.seedance_fast;
 
-    const input = { prompt, resolution, aspect_ratio, duration: parseInt(duration), nsfw_checker: true };
+    const input = { prompt, resolution, aspect_ratio, duration: String(parseInt(duration)), nsfw_checker: true };
     if (image_url) input.first_frame_url = image_url;
     if (end_image_url) input.last_frame_url = end_image_url;
     const data = await kiePost('/jobs/createTask', { model: modelId, input }, reqKey);
