@@ -104,15 +104,16 @@ app.post('/api/kie/save-key', async (req, res) => {
 app.post('/api/kie/upload-image', async (req, res) => {
   const { base64, filename = 'image.jpg' } = req.body || {};
   if (!base64) return res.json({ ok: false, error: 'base64 не передан' });
+  const reqKey = req.headers['x-kie-key'] || kieKey();
+  if (!reqKey) return res.json({ ok: false, error: 'KIE API ключ не задан' });
   try {
-    // KIE принимает multipart — используем fetch с FormData через Buffer
     const { FormData, File } = await import('formdata-node');
     const buf = Buffer.from(base64.replace(/^data:[^;]+;base64,/, ''), 'base64');
     const form = new FormData();
     form.set('file', new File([buf], filename, { type: 'image/jpeg' }));
     const r = await fetch(KIE_BASE + '/upload', {
       method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + kieKey() },
+      headers: { 'Authorization': 'Bearer ' + reqKey },
       body: form
     });
     const data = await r.json();
@@ -182,9 +183,10 @@ Rules:
     format === 'ad' ? 'product spotlight, clean composition, aspirational' :
     'cinematic depth, professional lighting'
   }
+- AUDIO/VOICEOVER: The voiceover and any spoken dialogue MUST be in Russian language. Describe voiceover text in Russian directly in the prompt (e.g. "Голос за кадром: «текст на русском»"). Background music and sound effects describe in English.
 - English text overlays are allowed if they add value
 - Describe mood, emotional tone, atmosphere
-- Output ONLY the prompt text in English. No explanations.`,
+- Output ONLY the prompt text in English (except Russian voiceover lines). No explanations.`,
 };
 
 const FORMAT_NAMES = {

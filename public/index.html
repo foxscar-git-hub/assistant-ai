@@ -1637,13 +1637,16 @@ function vgenClearImage(slot) {
 // Upload image to server (base64 → URL)
 async function vgenUploadImage(base64) {
   try {
+    const kieKey = localStorage.getItem('kie_api_key') || '';
     const r = await fetch('/api/kie/upload-image', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-kie-key': kieKey },
       body: JSON.stringify({ base64, filename: 'frame.jpg' })
     });
     const d = await r.json();
+    if (!d.ok) console.error('Image upload failed:', d.error);
     return d.ok ? d.url : null;
-  } catch { return null; }
+  } catch (e) { console.error('Image upload error:', e); return null; }
 }
 
 function vgenShowProgress(msg) {
