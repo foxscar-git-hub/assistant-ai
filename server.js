@@ -1,7 +1,27 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
+const { execFile } = require('child_process');
 const Anthropic = require('@anthropic-ai/sdk');
+const multer = require('multer');
+
+const FFMPEG = path.join(__dirname, 'node_modules/ffmpeg-static/ffmpeg');
+
+// ── multer for cut uploads ──
+const cutStorage = multer.diskStorage({
+  destination(req, file, cb) {
+    const projectId = req.body?.projectId || req.query?.projectId || ('proj_' + Date.now());
+    req._cutProjectId = projectId;
+    const dir = path.join(__dirname, 'data', 'cut-uploads', projectId);
+    fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename(req, file, cb) {
+    const ext = path.extname(file.originalname) || '.mp4';
+    cb(null, 'original' + ext);
+  }
+});
+const cutUpload = multer({ storage: cutStorage });
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -395,6 +415,244 @@ app.get('/api/videogen/status/:taskId', async (req, res) => {
     res.json({ status: 'pending', state: task.state });
   } catch (e) {
     res.json({ status: 'error', error: e.message });
+  }
+});
+
+// ── Video Cutting endpoints ──
+
+// Static serve for cut clips
+app.use('/cut-files', express.static(path.join(__dirname, 'data', 'cut-uploads')));
+
+// Helper: run ffmpeg command
+function ffmpegExec(args) {
+  return new Promise((resolve, reject) => {
+    execFile(FFMPEG, args, { maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
+      if (err) reject(new Error(stderr || err.message));
+      else resolve({ stdout, stderr });
+    });
+  });
+}
+
+// Helper: get video duration via ffmpeg
+function getVideoDuration(filePath) {
+  return new Promise((resolve, reject) => {
+    execFile(FFMPEG, ['-i', filePath, '-f', 'null', '-'], { maxBuffer: 2 * 1024 * 1024 }, (err, stdout, stderr) => {
+      // ffmpeg always exits with error when outputting to null, parse stderr
+      const m = (stderr || '').match(/Duration:\s*(\d+):(\d+):(\d+\.?\d*)/);
+      if (m) {
+        const dur = parseInt(m[1]) * 3600 + parseInt(m[2]) * 60 + parseFloat(m[3]);
+        resolve(dur);
+      } else {
+        reject(new Error('Cannot read video duration'));
+      }
+    });
+  });
+}
+
+// POST /api/cut/upload
+app.post('/api/cut/upload', (req, res, next) => {
+  // Parse projectId from query or body before multer reads body
+  const projectId = req.query.projectId || ('proj_' + Date.now());
+  req._cutProjectId = projectId;
+  next();
+}, cutUpload.single('video'), async (req, res) => {
+  try {
+    if (!req.file) return res.json({ ok: false, error: 'Файл не передан' });
+    const projectId = req.body?.projectId || req._cutProjectId || ('proj_' + Date.now());
+    const filePath = req.file.path;
+    const size = req.file.size;
+    const duration = await getVideoDuration(filePath);
+    res.json({ ok: true, projectId, filePath, duration, size });
+  } catch (e) {
+    res.json({ ok: false, error: e.message });
+  }
+});
+
+// POST /api/cut/transcribe
+app.post('/api/cut/transcribe', async (req, res) => {
+  try {
+    const { projectId, openaiKey } = req.body || {};
+    if (!projectId) return res.json({ ok: false, error: 'projectId обязателен' });
+    if (!openaiKey) return res.json({ ok: false, error: 'openaiKey обязателен' });
+
+    const dir = path.join(__dirname, 'data', 'cut-uploads', projectId);
+    // Find original file
+    const files = fs.readdirSync(dir).filter(f => f.startsWith('original.'));
+    if (!files.length) return res.json({ ok: false, error: 'Видео не найдено. Загрузите файл.' });
+    const videoPath = path.join(dir, files[0]);
+
+    // Build FormData with file blob
+    const fileBuffer = fs.readFileSync(videoPath);
+    const ext = path.extname(files[0]).replace('.', '') || 'mp4';
+    const mimeMap = { mp4: 'video/mp4', mov: 'video/quicktime', avi: 'video/x-msvideo', webm: 'video/webm' };
+    const mime = mimeMap[ext] || 'video/mp4';
+
+    const form = new FormData();
+    form.append('file', new Blob([fileBuffer], { type: mime }), files[0]);
+    form.append('model', 'whisper-1');
+    form.append('response_format', 'verbose_json');
+
+    const r = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + openaiKey },
+      body: form,
+    });
+    const data = await r.json();
+    if (data.error) return res.json({ ok: false, error: data.error.message || JSON.stringify(data.error) });
+
+    const transcript = data.text || '';
+    const segments = data.segments || [];
+    fs.writeFileSync(path.join(dir, 'transcript.json'), JSON.stringify({ transcript, segments }, null, 2));
+    res.json({ ok: true, transcript, segments });
+  } catch (e) {
+    res.json({ ok: false, error: e.message });
+  }
+});
+
+// POST /api/cut/analyze
+app.post('/api/cut/analyze', async (req, res) => {
+  try {
+    const { projectId, count = 5, duration = 30, format = 'vertical', openrouterKey, anthropicKey } = req.body || {};
+    if (!projectId) return res.json({ ok: false, error: 'projectId обязателен' });
+
+    const dir = path.join(__dirname, 'data', 'cut-uploads', projectId);
+    const transcriptPath = path.join(dir, 'transcript.json');
+    if (!fs.existsSync(transcriptPath)) return res.json({ ok: false, error: 'Транскрипция не найдена. Сначала транскрибируйте видео.' });
+    const { transcript, segments } = JSON.parse(fs.readFileSync(transcriptPath, 'utf8'));
+
+    const systemPrompt = `You are an expert video editor specializing in viral short-form content. Analyze a video transcript and suggest the best cut points for engaging clips.`;
+    const userMsg = `Transcript:
+${transcript}
+
+${segments.length ? `Segments with timestamps:
+${segments.map(s => `[${s.start.toFixed(1)}s - ${s.end.toFixed(1)}s]: ${s.text}`).join('\n')}` : ''}
+
+Task: Find the ${count} most engaging moments to cut into short viral clips.
+Target clip duration: approximately ${duration} seconds each.
+Format: ${format === 'vertical' ? '9:16 vertical (TikTok/Reels)' : '16:9 horizontal (YouTube)'}
+
+Return ONLY a JSON array (no markdown, no explanation) with exactly ${count} objects:
+[{"start": 10.5, "end": 40.5, "title": "Clip title", "description": "Why this clip works"}]
+
+Rules:
+- start/end are seconds (floats)
+- Each clip must be ${Math.max(5, duration - 10)}-${duration + 15} seconds long
+- Pick the most engaging, self-contained moments
+- Titles should be catchy, under 60 chars`;
+
+    let resultText = '';
+
+    if (anthropicKey) {
+      const client = new Anthropic({ apiKey: anthropicKey });
+      const message = await client.messages.create({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 2000,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userMsg }],
+      });
+      resultText = message.content[0]?.text?.trim() || '';
+    } else if (openrouterKey) {
+      const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + openrouterKey,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'http://localhost:3000',
+        },
+        body: JSON.stringify({
+          model: 'anthropic/claude-sonnet-4-5',
+          max_tokens: 2000,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userMsg },
+          ],
+        }),
+      });
+      const data = await r.json();
+      resultText = data.choices?.[0]?.message?.content?.trim() || '';
+      if (!resultText && data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+    } else {
+      return res.json({ ok: false, error: 'Добавьте Anthropic или OpenRouter API ключ в настройках' });
+    }
+
+    // Parse JSON from response
+    const jsonMatch = resultText.match(/\[[\s\S]*\]/);
+    if (!jsonMatch) return res.json({ ok: false, error: 'AI не вернул корректный JSON. Ответ: ' + resultText.slice(0, 200) });
+    const cuts = JSON.parse(jsonMatch[0]);
+    res.json({ ok: true, cuts });
+  } catch (e) {
+    res.json({ ok: false, error: e.message });
+  }
+});
+
+// POST /api/cut/execute
+app.post('/api/cut/execute', async (req, res) => {
+  try {
+    const { projectId, cuts, format = 'vertical' } = req.body || {};
+    if (!projectId || !cuts?.length) return res.json({ ok: false, error: 'projectId и cuts обязательны' });
+
+    const dir = path.join(__dirname, 'data', 'cut-uploads', projectId);
+    const files = fs.readdirSync(dir).filter(f => f.startsWith('original.'));
+    if (!files.length) return res.json({ ok: false, error: 'Видео не найдено' });
+    const videoPath = path.join(dir, files[0]);
+
+    const clipsDir = path.join(dir, 'clips');
+    fs.mkdirSync(clipsDir, { recursive: true });
+
+    const isVertical = format === 'vertical';
+    // Filter/scale for output format
+    const vfFilter = isVertical
+      ? 'scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920'
+      : 'scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080';
+
+    const resultClips = [];
+    for (let i = 0; i < cuts.length; i++) {
+      const cut = cuts[i];
+      const outPath = path.join(clipsDir, `clip_${i + 1}.mp4`);
+      const start = parseFloat(cut.start);
+      const end = parseFloat(cut.end);
+      const duration = end - start;
+      if (duration <= 0) continue;
+
+      await ffmpegExec([
+        '-ss', String(start),
+        '-i', videoPath,
+        '-t', String(duration),
+        '-vf', vfFilter,
+        '-c:v', 'libx264',
+        '-preset', 'fast',
+        '-crf', '23',
+        '-c:a', 'aac',
+        '-b:a', '128k',
+        '-movflags', '+faststart',
+        '-y',
+        outPath,
+      ]);
+
+      const url = `/cut-files/${projectId}/clips/clip_${i + 1}.mp4`;
+      resultClips.push({ path: outPath, url, title: cut.title || `Клип ${i + 1}` });
+    }
+
+    res.json({ ok: true, clips: resultClips });
+  } catch (e) {
+    res.json({ ok: false, error: e.message });
+  }
+});
+
+// GET /api/cut/projects/:projectId/clips
+app.get('/api/cut/projects/:projectId/clips', (req, res) => {
+  try {
+    const clipsDir = path.join(__dirname, 'data', 'cut-uploads', req.params.projectId, 'clips');
+    if (!fs.existsSync(clipsDir)) return res.json({ ok: true, clips: [] });
+    const files = fs.readdirSync(clipsDir).filter(f => f.endsWith('.mp4')).sort();
+    const clips = files.map(f => ({
+      filename: f,
+      url: `/cut-files/${req.params.projectId}/clips/${f}`,
+      title: f.replace('.mp4', '').replace(/_/g, ' '),
+    }));
+    res.json({ ok: true, clips });
+  } catch (e) {
+    res.json({ ok: false, error: e.message });
   }
 });
 

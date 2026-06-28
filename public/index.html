@@ -553,6 +553,255 @@
   .empty-state .es-icon { font-size: 48px; margin-bottom: 16px; opacity: 0.4; }
   .empty-state h3 { font-size: 16px; font-weight: 600; color: var(--text); margin-bottom: 8px; }
   .empty-state p  { font-size: 13px; }
+
+  /* ── Video Cutting (Нарезка видео) ── */
+  #vtab-edit { display: none; }
+  #vtab-edit.active { display: flex !important; flex-direction: row; flex: 1; overflow: hidden; padding: 0; }
+
+  .cut-settings-col {
+    width: 350px;
+    min-width: 280px;
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--sidebar-bg);
+  }
+  .cut-settings-header {
+    padding: 14px 16px 10px;
+    border-bottom: 1px solid var(--border);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .cut-settings-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .cut-settings-body::-webkit-scrollbar { width: 4px; }
+  .cut-settings-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  .cut-work-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .cut-work-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    padding: 0 16px;
+    flex-shrink: 0;
+    gap: 2px;
+    background: var(--card-bg);
+  }
+  .cut-wtab-btn {
+    padding: 10px 14px;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-muted);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+    margin-bottom: -1px;
+    white-space: nowrap;
+  }
+  .cut-wtab-btn:hover { color: var(--text); }
+  .cut-wtab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .cut-wtab-panel { display: none; flex: 1; overflow-y: auto; padding: 20px; }
+  .cut-wtab-panel.active { display: block; }
+  .cut-wtab-panel::-webkit-scrollbar { width: 6px; }
+  .cut-wtab-panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  /* Drop zone */
+  .cut-drop-zone {
+    border: 2px dashed var(--border);
+    border-radius: 12px;
+    padding: 40px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    min-height: 160px;
+  }
+  .cut-drop-zone:hover, .cut-drop-zone.drag-over {
+    border-color: var(--accent);
+    background: rgba(108,99,255,0.05);
+  }
+  .cut-drop-icon { font-size: 40px; opacity: 0.5; }
+  .cut-drop-text { font-size: 14px; color: var(--text-muted); }
+  .cut-drop-hint { font-size: 12px; color: var(--text-muted); opacity: 0.7; }
+
+  /* Step sections */
+  .cut-step {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px 20px;
+    margin-bottom: 14px;
+  }
+  .cut-step-title {
+    font-size: 13px;
+    font-weight: 700;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .cut-step-num {
+    width: 22px; height: 22px;
+    background: var(--accent);
+    color: #fff;
+    border-radius: 50%;
+    font-size: 11px;
+    font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+
+  /* Transcript box */
+  .cut-transcript-box {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    max-height: 200px;
+    overflow-y: auto;
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--text-muted);
+    white-space: pre-wrap;
+  }
+
+  /* Cuts list */
+  .cut-list-item {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin-bottom: 8px;
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+  }
+  .cut-list-item-num {
+    width: 28px; height: 28px;
+    background: rgba(108,99,255,0.15);
+    color: var(--accent);
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .cut-list-item-info { flex: 1; min-width: 0; }
+  .cut-list-item-title { font-size: 13px; font-weight: 600; margin-bottom: 3px; }
+  .cut-list-item-time { font-size: 11px; color: var(--accent); font-weight: 600; margin-bottom: 4px; }
+  .cut-list-item-desc { font-size: 12px; color: var(--text-muted); line-height: 1.4; }
+
+  /* Gallery grid */
+  .cut-gallery-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px;
+  }
+  .cut-clip-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    transition: border-color 0.15s;
+  }
+  .cut-clip-card:hover { border-color: var(--accent); }
+  .cut-clip-card video {
+    width: 100%;
+    display: block;
+    background: #000;
+    max-height: 200px;
+  }
+  .cut-clip-card-body {
+    padding: 10px 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .cut-clip-title { flex: 1; font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* Status badge */
+  .cut-status {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 700;
+    margin-top: 8px;
+  }
+  .cut-status.idle { background: rgba(107,114,128,0.1); color: var(--text-muted); }
+  .cut-status.working { background: rgba(108,99,255,0.15); color: var(--accent); }
+  .cut-status.done { background: rgba(0,201,167,0.1); color: #00c9a7; }
+  .cut-status.error { background: rgba(239,68,68,0.1); color: #ef4444; }
+
+  /* Settings label */
+  .cut-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    display: block;
+    margin-bottom: 6px;
+  }
+  .cut-input {
+    width: 100%;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    color: var(--text);
+    padding: 8px 10px;
+    font-size: 13px;
+    outline: none;
+    font-family: inherit;
+  }
+  .cut-input:focus { border-color: var(--accent); }
+  .cut-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 9px 18px; border-radius: 8px; border: none;
+    font-size: 13px; font-weight: 700; cursor: pointer;
+    transition: all 0.15s;
+  }
+  .cut-btn-primary {
+    background: var(--accent);
+    color: #fff;
+  }
+  .cut-btn-primary:hover { background: #7d75ff; }
+  .cut-btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+  .cut-btn-secondary {
+    background: var(--card-bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .cut-btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+  .cut-format-pill {
+    flex: 1; padding: 8px 6px; border: 1px solid var(--border);
+    border-radius: 7px; background: var(--card-bg); color: var(--text-muted);
+    font-size: 12px; font-weight: 700; cursor: pointer; text-align: center;
+    transition: all 0.15s; user-select: none;
+  }
+  .cut-format-pill.active {
+    background: rgba(108,99,255,0.15); border-color: var(--accent); color: var(--accent);
+  }
 </style>
 </head>
 <body>
@@ -870,18 +1119,136 @@
               <div id="vgen-history-strip"></div>
             </div>
 
-            <!-- Монтаж -->
+            <!-- Нарезка видео -->
             <div class="vtab-panel" id="vtab-edit">
-              <div class="card">
-                <h3>✂️ Монтаж видео</h3>
-                <p>Инструменты монтажа — в разработке.</p>
+
+              <!-- Left settings column -->
+              <div class="cut-settings-col">
+                <div class="cut-settings-header">
+                  Проекты
+                  <button class="vproj-add-btn" onclick="cutProjCreate()" title="Новый проект">+</button>
+                </div>
+                <div class="cut-settings-body">
+                  <!-- Project list -->
+                  <div>
+                    <div id="cut-proj-list" style="display:flex;flex-direction:column;gap:4px;margin-bottom:8px;">
+                      <div style="color:var(--text-muted);font-size:12px;text-align:center;padding:12px 0;">Нажмите + чтобы создать проект</div>
+                    </div>
+                  </div>
+
+                  <!-- Current video info -->
+                  <div id="cut-video-info" style="display:none;">
+                    <span class="cut-label">Загруженное видео</span>
+                    <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:12px;display:flex;flex-direction:column;gap:4px;">
+                      <div id="cut-info-name" style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></div>
+                      <div style="color:var(--text-muted);display:flex;gap:12px;">
+                        <span id="cut-info-dur"></span>
+                        <span id="cut-info-size"></span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Format -->
+                  <div>
+                    <span class="cut-label">Формат нарезки</span>
+                    <div style="display:flex;gap:8px;">
+                      <button class="cut-format-pill active" id="cut-fmt-vertical" onclick="cutSetFormat('vertical')">📱 Верт. 9:16</button>
+                      <button class="cut-format-pill" id="cut-fmt-horizontal" onclick="cutSetFormat('horizontal')">🎬 Гор. 16:9</button>
+                    </div>
+                  </div>
+
+                  <!-- Clips count -->
+                  <div>
+                    <span class="cut-label">Количество клипов: <span id="cut-count-val">5</span></span>
+                    <input type="range" min="1" max="20" value="5" class="cut-input" style="padding:0;cursor:pointer;"
+                      oninput="document.getElementById('cut-count-val').textContent=this.value" id="cut-count-slider">
+                  </div>
+
+                  <!-- Clip duration -->
+                  <div>
+                    <span class="cut-label">Длина клипа: <span id="cut-dur-val">30</span>с</span>
+                    <input type="range" min="5" max="120" value="30" class="cut-input" style="padding:0;cursor:pointer;"
+                      oninput="document.getElementById('cut-dur-val').textContent=this.value" id="cut-dur-slider">
+                  </div>
+                </div>
               </div>
-              <div style="margin-top:16px;background:var(--card-bg);border:1px dashed var(--border);border-radius:12px;padding:40px 24px;text-align:center;color:var(--text-muted);">
-                <div style="font-size:36px;margin-bottom:12px;opacity:0.4;">✂️</div>
-                <div style="font-size:14px;">Монтаж видеоматериалов проекта</div>
-                <div style="font-size:12px;margin-top:6px;opacity:0.7;">Загрузите видеофайлы для начала работы</div>
-              </div>
-            </div>
+
+              <!-- Right work area -->
+              <div class="cut-work-col">
+                <!-- Step tabs -->
+                <div class="cut-work-tabs">
+                  <button class="cut-wtab-btn active" onclick="cutSwitchTab('upload', this)">1 Загрузка</button>
+                  <button class="cut-wtab-btn" id="cut-tab-btn-transcribe" onclick="cutSwitchTab('transcribe', this)">2 Транскрипция</button>
+                  <button class="cut-tab-btn" class="cut-wtab-btn" id="cut-tab-btn-cuts" onclick="cutSwitchTab('cuts', this)" style="padding:10px 14px;background:none;border:none;border-bottom:2px solid transparent;color:var(--text-muted);font-size:13px;font-weight:600;cursor:pointer;transition:color .15s,border-color .15s;margin-bottom:-1px;white-space:nowrap;">3 Нарезка</button>
+                  <button class="cut-wtab-btn" onclick="cutSwitchTab('gallery', this); cutGalleryLoad();">4 Галерея</button>
+                </div>
+
+                <!-- Upload tab -->
+                <div class="cut-wtab-panel active" id="cut-panel-upload">
+                  <div id="cut-no-proj-msg" style="text-align:center;padding:40px 20px;color:var(--text-muted);">
+                    <div style="font-size:36px;opacity:0.3;margin-bottom:12px;">✂️</div>
+                    <div style="font-size:14px;">Создайте или выберите проект слева</div>
+                  </div>
+                  <div id="cut-upload-area" style="display:none;">
+                    <div class="cut-step">
+                      <div class="cut-step-title"><span class="cut-step-num">1</span>Загрузите видео</div>
+                      <div class="cut-drop-zone" id="cut-drop-zone"
+                        ondragover="event.preventDefault();this.classList.add('drag-over')"
+                        ondragleave="this.classList.remove('drag-over')"
+                        ondrop="cutHandleDrop(event)"
+                        onclick="document.getElementById('cut-file-input').click()">
+                        <input type="file" id="cut-file-input" accept="video/mp4,video/quicktime,video/x-msvideo,video/webm,.mp4,.mov,.avi,.webm" style="display:none;" onchange="cutHandleFile(this.files[0])">
+                        <div class="cut-drop-icon">🎬</div>
+                        <div class="cut-drop-text">Перетащите видео или нажмите</div>
+                        <div class="cut-drop-hint">MP4, MOV, AVI, WebM</div>
+                      </div>
+                      <div id="cut-upload-status" style="margin-top:10px;display:none;">
+                        <div class="cut-status working" id="cut-upload-badge">⏳ Загрузка...</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Transcribe tab -->
+                <div class="cut-wtab-panel" id="cut-panel-transcribe">
+                  <div class="cut-step">
+                    <div class="cut-step-title"><span class="cut-step-num">2</span>Транскрибировать видео</div>
+                    <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px;">Whisper преобразует речь в текст с временными метками. Требуется OpenAI API ключ.</p>
+                    <button class="cut-btn cut-btn-primary" onclick="cutTranscribe()" id="cut-transcribe-btn">🎙 Транскрибировать</button>
+                    <div id="cut-transcribe-status" style="margin-top:10px;"></div>
+                    <div id="cut-transcript-box" style="margin-top:14px;display:none;">
+                      <span class="cut-label">Транскрипция</span>
+                      <div class="cut-transcript-box" id="cut-transcript-text"></div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Cuts tab -->
+                <div class="cut-wtab-panel" id="cut-panel-cuts">
+                  <div class="cut-step">
+                    <div class="cut-step-title"><span class="cut-step-num">3</span>Умная нарезка</div>
+                    <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px;">AI проанализирует транскрипцию и найдёт самые интересные моменты.</p>
+                    <button class="cut-btn cut-btn-primary" onclick="cutAnalyze()" id="cut-analyze-btn">✂️ Умная нарезка</button>
+                    <div id="cut-analyze-status" style="margin-top:10px;"></div>
+                    <div id="cut-cuts-list" style="margin-top:16px;"></div>
+                    <div id="cut-execute-row" style="display:none;margin-top:12px;">
+                      <button class="cut-btn cut-btn-primary" onclick="cutExecute()" id="cut-execute-btn">🎬 Применить нарезку</button>
+                      <div id="cut-execute-status" style="margin-top:10px;"></div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Gallery tab -->
+                <div class="cut-wtab-panel" id="cut-panel-gallery">
+                  <div id="cut-gallery-empty" style="text-align:center;padding:60px 20px;color:var(--text-muted);">
+                    <div style="font-size:36px;opacity:0.3;margin-bottom:12px;">🎞</div>
+                    <div>Готовые клипы появятся здесь после нарезки</div>
+                  </div>
+                  <div class="cut-gallery-grid" id="cut-gallery-grid" style="display:none;"></div>
+                </div>
+
+              </div><!-- /cut-work-col -->
+            </div><!-- /vtab-edit -->
 
             <!-- Логи KIE -->
             <div class="vtab-panel" id="vtab-logs" style="padding:0;">
@@ -2235,6 +2602,332 @@ document.addEventListener('DOMContentLoaded', () => {
   updateHeaderDot();
   // Тихая фоновая проверка через 2 сек после загрузки
   setTimeout(runKeyChecks, 2000);
+});
+
+// ═══════ VIDEO CUTTING (Нарезка видео) ═══════
+
+const CUT_STORAGE_KEY = 'cut_projects';
+let cutProjects = [];
+let cutCurrentId = null;
+let cutCurrentCuts = [];
+let cutCurrentFormat = 'vertical';
+
+function cutProjLoad() {
+  try { cutProjects = JSON.parse(localStorage.getItem(CUT_STORAGE_KEY) || '[]'); } catch { cutProjects = []; }
+}
+function cutProjSave() {
+  localStorage.setItem(CUT_STORAGE_KEY, JSON.stringify(cutProjects));
+}
+function cutProjCreate() {
+  cutProjLoad();
+  const id = 'proj_' + Date.now();
+  const name = 'Проект ' + (cutProjects.length + 1);
+  cutProjects.unshift({ id, name, createdAt: new Date().toISOString() });
+  cutProjSave();
+  cutProjRender();
+  cutProjSelect(id);
+}
+function cutProjSelect(id) {
+  cutCurrentId = id;
+  cutProjRender();
+  // Show upload area, hide no-proj message
+  document.getElementById('cut-no-proj-msg').style.display = 'none';
+  document.getElementById('cut-upload-area').style.display = 'block';
+  // Reset upload status
+  document.getElementById('cut-upload-status').style.display = 'none';
+  document.getElementById('cut-drop-zone').style.display = 'flex';
+  // Check video info
+  const proj = cutProjects.find(p => p.id === id);
+  if (proj?.videoName) {
+    cutShowVideoInfo(proj.videoName, proj.videoDur, proj.videoSize);
+  } else {
+    document.getElementById('cut-video-info').style.display = 'none';
+  }
+  // Show transcript if exists
+  if (proj?.transcript) {
+    document.getElementById('cut-transcript-text').textContent = proj.transcript;
+    document.getElementById('cut-transcript-box').style.display = 'block';
+    document.getElementById('cut-transcribe-status').innerHTML = '<div class="cut-status done">✓ Транскрипция готова</div>';
+  } else {
+    document.getElementById('cut-transcript-box').style.display = 'none';
+    document.getElementById('cut-transcribe-status').innerHTML = '';
+  }
+  // Show cuts if exist
+  if (proj?.cuts?.length) {
+    cutCurrentCuts = proj.cuts;
+    cutRenderCutsList(proj.cuts);
+    document.getElementById('cut-execute-row').style.display = 'block';
+  } else {
+    cutCurrentCuts = [];
+    document.getElementById('cut-cuts-list').innerHTML = '';
+    document.getElementById('cut-execute-row').style.display = 'none';
+  }
+}
+function cutProjRender() {
+  cutProjLoad();
+  const list = document.getElementById('cut-proj-list');
+  if (!cutProjects.length) {
+    list.innerHTML = '<div style="color:var(--text-muted);font-size:12px;text-align:center;padding:12px 0;">Нажмите + чтобы создать проект</div>';
+    return;
+  }
+  list.innerHTML = cutProjects.map(p => `
+    <div class="vproj-item ${p.id === cutCurrentId ? 'active' : ''}" onclick="cutProjSelect('${p.id}')">
+      <span style="font-size:14px;">✂️</span>
+      <span class="vproj-item-name">${p.name}</span>
+      <button class="vproj-del-btn" onclick="event.stopPropagation();cutProjDelete('${p.id}')" title="Удалить">✕</button>
+    </div>
+  `).join('');
+}
+function cutProjDelete(id) {
+  if (!confirm('Удалить проект?')) return;
+  cutProjLoad();
+  cutProjects = cutProjects.filter(p => p.id !== id);
+  cutProjSave();
+  if (cutCurrentId === id) {
+    cutCurrentId = null;
+    document.getElementById('cut-no-proj-msg').style.display = 'block';
+    document.getElementById('cut-upload-area').style.display = 'none';
+    document.getElementById('cut-video-info').style.display = 'none';
+  }
+  cutProjRender();
+}
+
+function cutSetFormat(fmt) {
+  cutCurrentFormat = fmt;
+  document.getElementById('cut-fmt-vertical').classList.toggle('active', fmt === 'vertical');
+  document.getElementById('cut-fmt-horizontal').classList.toggle('active', fmt === 'horizontal');
+}
+
+function cutSwitchTab(name, btn) {
+  document.querySelectorAll('.cut-wtab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.cut-wtab-btn, .cut-tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('cut-panel-' + name).classList.add('active');
+  if (btn) btn.classList.add('active');
+}
+
+function cutShowVideoInfo(name, dur, size) {
+  document.getElementById('cut-video-info').style.display = 'block';
+  document.getElementById('cut-info-name').textContent = name;
+  document.getElementById('cut-info-dur').textContent = dur ? cutFmtDur(dur) : '';
+  document.getElementById('cut-info-size').textContent = size ? cutFmtSize(size) : '';
+}
+
+function cutFmtDur(s) {
+  s = Math.round(s);
+  const m = Math.floor(s / 60), sec = s % 60;
+  return m + ':' + String(sec).padStart(2, '0');
+}
+function cutFmtSize(bytes) {
+  if (bytes > 1e9) return (bytes / 1e9).toFixed(1) + ' GB';
+  if (bytes > 1e6) return (bytes / 1e6).toFixed(1) + ' MB';
+  return (bytes / 1e3).toFixed(0) + ' KB';
+}
+
+function cutHandleDrop(ev) {
+  ev.preventDefault();
+  document.getElementById('cut-drop-zone').classList.remove('drag-over');
+  const file = ev.dataTransfer.files[0];
+  if (file) cutUploadVideo(file);
+}
+function cutHandleFile(file) {
+  if (file) cutUploadVideo(file);
+}
+
+async function cutUploadVideo(file) {
+  if (!cutCurrentId) return alert('Сначала создайте проект');
+  const statusEl = document.getElementById('cut-upload-status');
+  const badge = document.getElementById('cut-upload-badge');
+  statusEl.style.display = 'block';
+  badge.className = 'cut-status working';
+  badge.textContent = '⏳ Загрузка...';
+
+  try {
+    const form = new FormData();
+    form.append('video', file);
+    form.append('projectId', cutCurrentId);
+    const r = await fetch('/api/cut/upload?projectId=' + encodeURIComponent(cutCurrentId), {
+      method: 'POST',
+      body: form,
+    });
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error);
+    badge.className = 'cut-status done';
+    badge.textContent = '✓ Загружено успешно';
+    // Save to project
+    cutProjLoad();
+    const proj = cutProjects.find(p => p.id === cutCurrentId);
+    if (proj) {
+      proj.videoName = file.name;
+      proj.videoDur = d.duration;
+      proj.videoSize = d.size;
+      cutProjSave();
+    }
+    cutShowVideoInfo(file.name, d.duration, d.size);
+  } catch (e) {
+    badge.className = 'cut-status error';
+    badge.textContent = '✗ ' + e.message;
+  }
+}
+
+async function cutTranscribe() {
+  if (!cutCurrentId) return alert('Нет активного проекта');
+  const openaiKey = localStorage.getItem('openai_api_key') || '';
+  if (!openaiKey) return alert('Добавьте OpenAI API ключ в настройках ⚙️');
+
+  const btn = document.getElementById('cut-transcribe-btn');
+  const statusEl = document.getElementById('cut-transcribe-status');
+  btn.disabled = true;
+  btn.textContent = '⏳ Транскрибирование...';
+  statusEl.innerHTML = '<div class="cut-status working">⏳ Отправка в Whisper API...</div>';
+  document.getElementById('cut-transcript-box').style.display = 'none';
+
+  try {
+    const r = await fetch('/api/cut/transcribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projectId: cutCurrentId, openaiKey }),
+    });
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error);
+
+    statusEl.innerHTML = '<div class="cut-status done">✓ Транскрипция готова</div>';
+    document.getElementById('cut-transcript-text').textContent = d.transcript;
+    document.getElementById('cut-transcript-box').style.display = 'block';
+
+    // Save transcript to project
+    cutProjLoad();
+    const proj = cutProjects.find(p => p.id === cutCurrentId);
+    if (proj) { proj.transcript = d.transcript; proj.segments = d.segments; cutProjSave(); }
+  } catch (e) {
+    statusEl.innerHTML = '<div class="cut-status error">✗ ' + e.message + '</div>';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🎙 Транскрибировать';
+  }
+}
+
+async function cutAnalyze() {
+  if (!cutCurrentId) return alert('Нет активного проекта');
+  const proj = cutProjects.find(p => p.id === cutCurrentId);
+  if (!proj?.transcript) return alert('Сначала транскрибируйте видео');
+
+  const anthropicKey = localStorage.getItem('anthropic_api_key') || '';
+  const openrouterKey = localStorage.getItem('openrouter_api_key') || '';
+  if (!anthropicKey && !openrouterKey) return alert('Добавьте Anthropic или OpenRouter API ключ в настройках ⚙️');
+
+  const count = parseInt(document.getElementById('cut-count-slider').value) || 5;
+  const duration = parseInt(document.getElementById('cut-dur-slider').value) || 30;
+
+  const btn = document.getElementById('cut-analyze-btn');
+  const statusEl = document.getElementById('cut-analyze-status');
+  btn.disabled = true;
+  btn.textContent = '⏳ Анализирую...';
+  statusEl.innerHTML = '<div class="cut-status working">⏳ AI анализирует транскрипцию...</div>';
+  document.getElementById('cut-cuts-list').innerHTML = '';
+  document.getElementById('cut-execute-row').style.display = 'none';
+
+  try {
+    const r = await fetch('/api/cut/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projectId: cutCurrentId, count, duration, format: cutCurrentFormat, anthropicKey, openrouterKey }),
+    });
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error);
+
+    cutCurrentCuts = d.cuts;
+    statusEl.innerHTML = '<div class="cut-status done">✓ Найдено ' + d.cuts.length + ' точек нарезки</div>';
+    cutRenderCutsList(d.cuts);
+    document.getElementById('cut-execute-row').style.display = 'block';
+
+    // Save cuts
+    cutProjLoad();
+    const p = cutProjects.find(p => p.id === cutCurrentId);
+    if (p) { p.cuts = d.cuts; cutProjSave(); }
+  } catch (e) {
+    statusEl.innerHTML = '<div class="cut-status error">✗ ' + e.message + '</div>';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '✂️ Умная нарезка';
+  }
+}
+
+function cutRenderCutsList(cuts) {
+  const el = document.getElementById('cut-cuts-list');
+  el.innerHTML = cuts.map((c, i) => `
+    <div class="cut-list-item">
+      <div class="cut-list-item-num">${i + 1}</div>
+      <div class="cut-list-item-info">
+        <div class="cut-list-item-title">${c.title || 'Клип ' + (i+1)}</div>
+        <div class="cut-list-item-time">⏱ ${cutFmtDur(c.start)} → ${cutFmtDur(c.end)} (${cutFmtDur(c.end - c.start)})</div>
+        <div class="cut-list-item-desc">${c.description || ''}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function cutExecute() {
+  if (!cutCurrentId || !cutCurrentCuts.length) return;
+  const btn = document.getElementById('cut-execute-btn');
+  const statusEl = document.getElementById('cut-execute-status');
+  btn.disabled = true;
+  btn.textContent = '⏳ Нарезаю...';
+  statusEl.innerHTML = '<div class="cut-status working">⏳ FFmpeg нарезает клипы...</div>';
+
+  try {
+    const r = await fetch('/api/cut/execute', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projectId: cutCurrentId, cuts: cutCurrentCuts, format: cutCurrentFormat }),
+    });
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error);
+    statusEl.innerHTML = '<div class="cut-status done">✓ Готово! ' + d.clips.length + ' клипов нарезано</div>';
+    // Switch to gallery
+    setTimeout(() => {
+      cutSwitchTab('gallery', document.querySelectorAll('.cut-wtab-btn')[3]);
+      cutGalleryLoad();
+    }, 800);
+  } catch (e) {
+    statusEl.innerHTML = '<div class="cut-status error">✗ ' + e.message + '</div>';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🎬 Применить нарезку';
+  }
+}
+
+async function cutGalleryLoad() {
+  if (!cutCurrentId) return;
+  const grid = document.getElementById('cut-gallery-grid');
+  const empty = document.getElementById('cut-gallery-empty');
+  try {
+    const r = await fetch('/api/cut/projects/' + encodeURIComponent(cutCurrentId) + '/clips');
+    const d = await r.json();
+    if (!d.ok || !d.clips.length) {
+      grid.style.display = 'none';
+      empty.style.display = 'block';
+      return;
+    }
+    empty.style.display = 'none';
+    grid.style.display = 'grid';
+    grid.innerHTML = d.clips.map(c => `
+      <div class="cut-clip-card">
+        <video src="${c.url}" controls preload="metadata" style="max-height:180px;"></video>
+        <div class="cut-clip-card-body">
+          <span class="cut-clip-title">${c.title}</span>
+          <a href="${c.url}" download style="background:none;border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:11px;font-weight:600;color:var(--text-muted);text-decoration:none;flex-shrink:0;transition:color .15s;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-muted)'">↓</a>
+        </div>
+      </div>
+    `).join('');
+  } catch (e) {
+    grid.style.display = 'none';
+    empty.style.display = 'block';
+  }
+}
+
+// Init cutting on DOMContentLoaded
+document.addEventListener('DOMContentLoaded', () => {
+  cutProjRender();
 });
 </script>
 
