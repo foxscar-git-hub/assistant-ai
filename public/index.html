@@ -893,6 +893,7 @@
   <div class="topbar">
     <span class="topbar-title" id="page-title">Выберите раздел</span>
     <span class="topbar-badge" id="page-badge"></span>
+    <span id="kie-balance-chip" style="display:none;margin-left:auto;font-size:12px;font-weight:600;color:var(--text-muted);background:rgba(108,99,255,0.1);border:1px solid rgba(108,99,255,0.25);border-radius:20px;padding:3px 10px;cursor:pointer;" onclick="kieBalanceRefresh()" title="Обновить баланс">💎 <span id="kie-balance-val">…</span></span>
   </div>
 
   <div class="content">
@@ -1337,12 +1338,30 @@ const pageMeta = {
   'todo-auth':    { title: 'Авторизация',        badge: 'badge-todo', label: 'Не готово' },
 };
 
+async function kieBalanceRefresh() {
+  const key = localStorage.getItem('kie_api_key') || '';
+  if (!key) return;
+  const chip = document.getElementById('kie-balance-chip');
+  const val  = document.getElementById('kie-balance-val');
+  if (val) val.textContent = '…';
+  try {
+    const r = await fetch('/api/kie/balance', { headers: { 'x-kie-key': key } });
+    const d = await r.json();
+    if (d.ok && d.credits != null) {
+      if (val) val.textContent = Number(d.credits).toLocaleString('ru-RU');
+      if (chip) chip.style.display = 'inline-flex';
+    }
+  } catch {}
+}
+
 function openPage(id) {
   // hide all pages
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById('page-' + id)?.classList.add('active');
-  // Restore video generation state if returning to video page
-  if (id === 'wip-video') setTimeout(vgenRestoreIfActive, 50);
+  // Show/hide KIE balance chip
+  const chip = document.getElementById('kie-balance-chip');
+  if (chip) chip.style.display = id === 'wip-video' ? 'inline-flex' : 'none';
+  if (id === 'wip-video') { kieBalanceRefresh(); setTimeout(vgenRestoreIfActive, 50); }
 
   // update nav active state
   document.querySelectorAll('.nav-item').forEach(el => {

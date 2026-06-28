@@ -1,5 +1,14 @@
 [
   {
+    "taskId": "2bbe4353f2dbf3a1dc6777738c9afc22",
+    "model": "gemini-omni-video",
+    "state": "success",
+    "createdAt": "2026-06-28T13:17:59.739Z",
+    "input": "{\"prompt\":\"Wide-angle camera positioned at ground level, slightly tilted upward to capture full body and sky. Scene opens [reference_image: first_frame] with athletic male in his twenties standing confidently at outdoor sports ground, wearing distinctive bright pants exactly as shown in reference image – vibrant color, fitted athletic cut, bold branding visible. Background: urban playground with metal bars, rubber surface, golden hour lighting casting long shadows, warm orange glow on equipment. High contrast, saturated colors for viral appeal.\\n\\n0–3s: Athlete stands center frame, catches breath after previous move, adjusts stance. Camera holds steady. Голос за кадром: «Смотрите, что я могу в этих штанах от ХитКлаб!» Ambient street sounds, distant city hum.\\n\\n3–6s: Explosive movement begins – athlete sprints three steps forward, camera follows with smooth tracking motion. He launches into powerful backflip (salto), body rotating cleanly against bright blue sky. Slow-motion applied at peak rotation. Pants fabric stretches naturally, showcasing flexibility. Dramatic whoosh sound effect. Sunlight creates lens flare at apex.\\n\\n6–10s: Athlete lands perfectly on both feet, arms raised in victory pose, huge confident smile. Camera pushes in slightly tighter. Голос за кадром продолжает: «И вы сможете так!» Quick zoom on pants branding. Upbeat electronic music drop hits. Text overlay appears in English: \\\"HITCLUB PANTS\\\" with fire emoji. Energy, triumph, aspirational mood. Viral hook: impressive athletic feat + relatable product promise.\",\"resolution\":\"720p\",\"aspect_ratio\":\"9:16\",\"duration\":\"10\",\"nsfw_checker\":true}",
+    "resultJson": "{\"resultUrls\":[\"https://tempfile.aiquickdraw.com/v/2bbe4353f2dbf3a1dc6777738c9afc22_1782652776.mp4\"]}",
+    "creditsConsumed": 180
+  },
+  {
     "taskId": "3b7223d7d01291dcb9b0ea035e39c882",
     "model": "bytedance/seedance-2-fast",
     "state": "success",

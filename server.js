@@ -91,7 +91,9 @@ app.post('/api/kie/check-key', async (req, res) => {
 // ── KIE: баланс ──
 app.get('/api/kie/balance', async (req, res) => {
   try {
-    const data = await kieGet('/chat/credit');
+    const reqKey = req.headers['x-kie-key'] || kieKey();
+    if (!reqKey) return res.json({ ok: false, error: 'Ключ не задан' });
+    const data = await kieGet('/chat/credit', reqKey);
     if (data?.code === 401) return res.json({ ok: false, error: 'Неверный ключ' });
     res.json({ ok: true, credits: data?.data?.credits ?? data?.credits ?? null });
   } catch (e) {
