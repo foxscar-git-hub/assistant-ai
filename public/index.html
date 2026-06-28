@@ -1788,6 +1788,8 @@ async function vgenRun() {
     }
     if (msg) msg.textContent = `Задача создана: ${d.taskId}`;
     vgenAnimateProgress(25);
+    // Refresh logs tab immediately if it's open
+    if (document.getElementById('vtab-logs')?.classList.contains('active')) kieLogsLoad();
     vgenPoll(d.taskId, Date.now(), 1);
   } catch (e) {
     vgenShowError(e.message);

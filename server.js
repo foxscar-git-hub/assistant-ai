@@ -6,6 +6,28 @@ const Anthropic = require('@anthropic-ai/sdk');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// ── Local video gen logs ──
+const LOCAL_LOGS_FILE = path.join(__dirname, 'data', 'videogen-logs.json');
+function localLogsRead() {
+  try { return JSON.parse(fs.readFileSync(LOCAL_LOGS_FILE, 'utf8')); } catch { return []; }
+}
+function localLogAppend(entry) {
+  try {
+    fs.mkdirSync(path.dirname(LOCAL_LOGS_FILE), { recursive: true });
+    const logs = localLogsRead();
+    logs.unshift(entry); // newest first
+    if (logs.length > 200) logs.length = 200;
+    fs.writeFileSync(LOCAL_LOGS_FILE, JSON.stringify(logs, null, 2));
+  } catch {}
+}
+function localLogUpdate(taskId, patch) {
+  try {
+    const logs = localLogsRead();
+    const idx = logs.findIndex(l => l.taskId === taskId);
+    if (idx !== -1) { Object.assign(logs[idx], patch); fs.writeFileSync(LOCAL_LOGS_FILE, JSON.stringify(logs, null, 2)); }
+  } catch {}
+}
+
 app.use(express.json({ limit: '20mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -244,18 +266,21 @@ Rewrite into an optimized ${modelName} video generation prompt. Include precise 
   }
 });
 
-// ── KIE: логи задач (история) ──
+// ── KIE: логи задач (история) — local + KIE merged ──
 app.get('/api/kie/logs', async (req, res) => {
+  const localLogs = localLogsRead();
   try {
     const reqKey = req.headers['x-kie-key'] || kieKey();
-    if (!reqKey) return res.json({ ok: false, error: 'KIE API ключ не задан' });
-    // KIE logs endpoint: /jobs/records — page=1, pageSize=20
+    if (!reqKey) return res.json({ ok: true, logs: localLogs });
     const data = await kieGet('/jobs/records?page=1&pageSize=50', reqKey);
-    if (data?.code === 401 || data?.code === 403) return res.json({ ok: false, error: 'Неверный ключ' });
-    const logs = data?.data?.list || data?.data?.records || data?.data || [];
-    res.json({ ok: true, logs: Array.isArray(logs) ? logs : [] });
+    if (data?.code === 401 || data?.code === 403) return res.json({ ok: true, logs: localLogs });
+    const kieLogs = data?.data?.list || data?.data?.records || (Array.isArray(data?.data) ? data.data : []);
+    // Merge: KIE entries override local by taskId (KIE has full data); local entries not in KIE stay on top
+    const kieIds = new Set(kieLogs.map(l => l.taskId));
+    const onlyLocal = localLogs.filter(l => !kieIds.has(l.taskId));
+    res.json({ ok: true, logs: [...onlyLocal, ...kieLogs] });
   } catch (e) {
-    res.json({ ok: false, error: e.message });
+    res.json({ ok: true, logs: localLogs });
   }
 });
 
@@ -309,7 +334,17 @@ app.post('/api/videogen', async (req, res) => {
     if (data.code !== 200 && !data.data?.taskId) {
       return res.json({ ok: false, error: data.msg || JSON.stringify(data) });
     }
-    res.json({ ok: true, taskId: data.data?.taskId || data.taskId });
+    const taskId = data.data?.taskId || data.taskId;
+    // Save local log immediately so it appears in logs tab without delay
+    localLogAppend({
+      taskId,
+      model: modelId,
+      state: 'processing',
+      createdAt: new Date().toISOString(),
+      input: JSON.stringify(input),
+      resultJson: null,
+    });
+    res.json({ ok: true, taskId });
   } catch (e) {
     res.json({ ok: false, error: e.message });
   }
@@ -324,9 +359,13 @@ app.get('/api/videogen/status/:taskId', async (req, res) => {
     if (task.state === 'success') {
       let resultUrls = [];
       try { resultUrls = JSON.parse(task.resultJson || '{}').resultUrls || []; } catch {}
+      localLogUpdate(req.params.taskId, { state: 'success', resultJson: task.resultJson, creditsConsumed: task.creditsConsumed });
       return res.json({ status: 'success', url: resultUrls[0] || '', credits: task.creditsConsumed, costTime: task.costTime });
     }
-    if (task.state === 'fail') return res.json({ status: 'failed', error: task.failMsg || 'Ошибка генерации' });
+    if (task.state === 'fail') {
+      localLogUpdate(req.params.taskId, { state: 'fail', failMsg: task.failMsg });
+      return res.json({ status: 'failed', error: task.failMsg || 'Ошибка генерации' });
+    }
     res.json({ status: 'pending', state: task.state });
   } catch (e) {
     res.json({ status: 'error', error: e.message });
