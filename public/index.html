@@ -245,6 +245,7 @@
   .page.active { display: block; }
   /* Video page needs flex full-height */
   #page-wip-video.active { display: flex; }
+  #page-wip-cut.active { display: flex; }
 
   /* ── Video Studio layout ── */
   .video-studio {
@@ -555,8 +556,6 @@
   .empty-state p  { font-size: 13px; }
 
   /* ── Video Cutting (Нарезка видео) ── */
-  #vtab-edit { display: none; }
-  #vtab-edit.active { display: flex !important; flex-direction: row; flex: 1; overflow: hidden; padding: 0; }
 
   .cut-settings-col {
     width: 350px;
@@ -858,6 +857,9 @@
         <a class="nav-item" onclick="openPage('wip-video')" data-page="wip-video">
           <span class="nav-item-icon">🎬</span> Видео
         </a>
+        <a class="nav-item" onclick="openPage('wip-cut')" data-page="wip-cut">
+          <span class="nav-item-icon">✂️</span> Видео нарезка
+        </a>
       </div>
     </div>
 
@@ -952,7 +954,6 @@
           <div id="vwork-content" style="display:none;flex-direction:column;flex:1;overflow:hidden;">
             <div class="vtabs">
               <button class="vtab-btn active" onclick="vswitchTab('generate', this)">✨ Генерация видео</button>
-              <button class="vtab-btn" onclick="vswitchTab('edit', this)">✂️ Монтаж видео</button>
               <button class="vtab-btn" onclick="vswitchTab('logs', this); kieLogsLoad();">📋 Логи KIE</button>
             </div>
 
@@ -1122,135 +1123,6 @@
             </div>
 
             <!-- Нарезка видео -->
-            <div class="vtab-panel" id="vtab-edit">
-
-              <!-- Left settings column -->
-              <div class="cut-settings-col">
-                <div class="cut-settings-header">
-                  Проекты
-                  <button class="vproj-add-btn" onclick="cutProjCreate()" title="Новый проект">+</button>
-                </div>
-                <div class="cut-settings-body">
-                  <!-- Project list -->
-                  <div>
-                    <div id="cut-proj-list" style="display:flex;flex-direction:column;gap:4px;margin-bottom:8px;">
-                      <div style="color:var(--text-muted);font-size:12px;text-align:center;padding:12px 0;">Нажмите + чтобы создать проект</div>
-                    </div>
-                  </div>
-
-                  <!-- Current video info -->
-                  <div id="cut-video-info" style="display:none;">
-                    <span class="cut-label">Загруженное видео</span>
-                    <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:12px;display:flex;flex-direction:column;gap:4px;">
-                      <div id="cut-info-name" style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></div>
-                      <div style="color:var(--text-muted);display:flex;gap:12px;">
-                        <span id="cut-info-dur"></span>
-                        <span id="cut-info-size"></span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <!-- Format -->
-                  <div>
-                    <span class="cut-label">Формат нарезки</span>
-                    <div style="display:flex;gap:8px;">
-                      <button class="cut-format-pill active" id="cut-fmt-vertical" onclick="cutSetFormat('vertical')">📱 Верт. 9:16</button>
-                      <button class="cut-format-pill" id="cut-fmt-horizontal" onclick="cutSetFormat('horizontal')">🎬 Гор. 16:9</button>
-                    </div>
-                  </div>
-
-                  <!-- Clips count -->
-                  <div>
-                    <span class="cut-label">Количество клипов: <span id="cut-count-val">5</span></span>
-                    <input type="range" min="1" max="20" value="5" class="cut-input" style="padding:0;cursor:pointer;"
-                      oninput="document.getElementById('cut-count-val').textContent=this.value" id="cut-count-slider">
-                  </div>
-
-                  <!-- Clip duration -->
-                  <div>
-                    <span class="cut-label">Длина клипа: <span id="cut-dur-val">30</span>с</span>
-                    <input type="range" min="5" max="120" value="30" class="cut-input" style="padding:0;cursor:pointer;"
-                      oninput="document.getElementById('cut-dur-val').textContent=this.value" id="cut-dur-slider">
-                  </div>
-                </div>
-              </div>
-
-              <!-- Right work area -->
-              <div class="cut-work-col">
-                <!-- Step tabs -->
-                <div class="cut-work-tabs">
-                  <button class="cut-wtab-btn active" onclick="cutSwitchTab('upload', this)">1 Загрузка</button>
-                  <button class="cut-wtab-btn" id="cut-tab-btn-transcribe" onclick="cutSwitchTab('transcribe', this)">2 Транскрипция</button>
-                  <button class="cut-tab-btn" class="cut-wtab-btn" id="cut-tab-btn-cuts" onclick="cutSwitchTab('cuts', this)" style="padding:10px 14px;background:none;border:none;border-bottom:2px solid transparent;color:var(--text-muted);font-size:13px;font-weight:600;cursor:pointer;transition:color .15s,border-color .15s;margin-bottom:-1px;white-space:nowrap;">3 Нарезка</button>
-                  <button class="cut-wtab-btn" onclick="cutSwitchTab('gallery', this); cutGalleryLoad();">4 Галерея</button>
-                </div>
-
-                <!-- Upload tab -->
-                <div class="cut-wtab-panel active" id="cut-panel-upload">
-                  <div id="cut-no-proj-msg" style="text-align:center;padding:40px 20px;color:var(--text-muted);">
-                    <div style="font-size:36px;opacity:0.3;margin-bottom:12px;">✂️</div>
-                    <div style="font-size:14px;">Создайте или выберите проект слева</div>
-                  </div>
-                  <div id="cut-upload-area" style="display:none;">
-                    <div class="cut-step">
-                      <div class="cut-step-title"><span class="cut-step-num">1</span>Загрузите видео</div>
-                      <div class="cut-drop-zone" id="cut-drop-zone"
-                        ondragover="event.preventDefault();this.classList.add('drag-over')"
-                        ondragleave="this.classList.remove('drag-over')"
-                        ondrop="cutHandleDrop(event)"
-                        onclick="document.getElementById('cut-file-input').click()">
-                        <input type="file" id="cut-file-input" accept="video/mp4,video/quicktime,video/x-msvideo,video/webm,.mp4,.mov,.avi,.webm" style="display:none;" onchange="cutHandleFile(this.files[0])">
-                        <div class="cut-drop-icon">🎬</div>
-                        <div class="cut-drop-text">Перетащите видео или нажмите</div>
-                        <div class="cut-drop-hint">MP4, MOV, AVI, WebM</div>
-                      </div>
-                      <div id="cut-upload-status" style="margin-top:10px;display:none;">
-                        <div class="cut-status working" id="cut-upload-badge">⏳ Загрузка...</div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Transcribe tab -->
-                <div class="cut-wtab-panel" id="cut-panel-transcribe">
-                  <div class="cut-step">
-                    <div class="cut-step-title"><span class="cut-step-num">2</span>Транскрибировать видео</div>
-                    <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px;">Whisper преобразует речь в текст с временными метками. Требуется OpenAI API ключ.</p>
-                    <button class="cut-btn cut-btn-primary" onclick="cutTranscribe()" id="cut-transcribe-btn">🎙 Транскрибировать</button>
-                    <div id="cut-transcribe-status" style="margin-top:10px;"></div>
-                    <div id="cut-transcript-box" style="margin-top:14px;display:none;">
-                      <span class="cut-label">Транскрипция</span>
-                      <div class="cut-transcript-box" id="cut-transcript-text"></div>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Cuts tab -->
-                <div class="cut-wtab-panel" id="cut-panel-cuts">
-                  <div class="cut-step">
-                    <div class="cut-step-title"><span class="cut-step-num">3</span>Умная нарезка</div>
-                    <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px;">AI проанализирует транскрипцию и найдёт самые интересные моменты.</p>
-                    <button class="cut-btn cut-btn-primary" onclick="cutAnalyze()" id="cut-analyze-btn">✂️ Умная нарезка</button>
-                    <div id="cut-analyze-status" style="margin-top:10px;"></div>
-                    <div id="cut-cuts-list" style="margin-top:16px;"></div>
-                    <div id="cut-execute-row" style="display:none;margin-top:12px;">
-                      <button class="cut-btn cut-btn-primary" onclick="cutExecute()" id="cut-execute-btn">🎬 Применить нарезку</button>
-                      <div id="cut-execute-status" style="margin-top:10px;"></div>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Gallery tab -->
-                <div class="cut-wtab-panel" id="cut-panel-gallery">
-                  <div id="cut-gallery-empty" style="text-align:center;padding:60px 20px;color:var(--text-muted);">
-                    <div style="font-size:36px;opacity:0.3;margin-bottom:12px;">🎞</div>
-                    <div>Готовые клипы появятся здесь после нарезки</div>
-                  </div>
-                  <div class="cut-gallery-grid" id="cut-gallery-grid" style="display:none;"></div>
-                </div>
-
-              </div><!-- /cut-work-col -->
-            </div><!-- /vtab-edit -->
 
             <!-- Логи KIE -->
             <div class="vtab-panel" id="vtab-logs" style="padding:0;">
@@ -1323,6 +1195,123 @@
       </div>
     </div>
 
+    <!-- ── ВИДЕО НАРЕЗКА (отдельная страница) ── -->
+    <div class="page" id="page-wip-cut" style="flex-direction:row;overflow:hidden;padding:0;">
+
+      <!-- Left settings column -->
+      <div class="cut-settings-col">
+        <div class="cut-settings-header">
+          Проекты
+          <button class="vproj-add-btn" onclick="cutProjCreate()" title="Новый проект">+</button>
+        </div>
+        <div class="cut-settings-body">
+          <div>
+            <div id="cut-proj-list" style="display:flex;flex-direction:column;gap:4px;margin-bottom:8px;">
+              <div style="color:var(--text-muted);font-size:12px;text-align:center;padding:12px 0;">Нажмите + чтобы создать проект</div>
+            </div>
+          </div>
+          <div id="cut-video-info" style="display:none;">
+            <span class="cut-label">Загруженное видео</span>
+            <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:12px;display:flex;flex-direction:column;gap:4px;">
+              <div id="cut-info-name" style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></div>
+              <div style="color:var(--text-muted);display:flex;gap:12px;">
+                <span id="cut-info-dur"></span>
+                <span id="cut-info-size"></span>
+              </div>
+            </div>
+          </div>
+          <div>
+            <span class="cut-label">Формат нарезки</span>
+            <div style="display:flex;gap:8px;">
+              <button class="cut-format-pill active" id="cut-fmt-vertical" onclick="cutSetFormat('vertical')">📱 Верт. 9:16</button>
+              <button class="cut-format-pill" id="cut-fmt-horizontal" onclick="cutSetFormat('horizontal')">🎬 Гор. 16:9</button>
+            </div>
+          </div>
+          <div>
+            <span class="cut-label">Количество клипов: <span id="cut-count-val">5</span></span>
+            <input type="range" min="1" max="20" value="5" class="cut-input" style="padding:0;cursor:pointer;"
+              oninput="document.getElementById('cut-count-val').textContent=this.value" id="cut-count-slider">
+          </div>
+          <div>
+            <span class="cut-label">Длина клипа: <span id="cut-dur-val">30</span>с</span>
+            <input type="range" min="5" max="120" value="30" class="cut-input" style="padding:0;cursor:pointer;"
+              oninput="document.getElementById('cut-dur-val').textContent=this.value" id="cut-dur-slider">
+          </div>
+        </div>
+      </div>
+
+      <!-- Right work area -->
+      <div class="cut-work-col">
+        <div class="cut-work-tabs">
+          <button class="cut-wtab-btn active" onclick="cutSwitchTab('upload', this)">1 Загрузка</button>
+          <button class="cut-wtab-btn" id="cut-tab-btn-transcribe" onclick="cutSwitchTab('transcribe', this)">2 Транскрипция</button>
+          <button class="cut-wtab-btn" id="cut-tab-btn-cuts" onclick="cutSwitchTab('cuts', this)">3 Нарезка</button>
+          <button class="cut-wtab-btn" onclick="cutSwitchTab('gallery', this); cutGalleryLoad();">4 Галерея</button>
+        </div>
+
+        <div class="cut-wtab-panel active" id="cut-panel-upload">
+          <div id="cut-no-proj-msg" style="text-align:center;padding:40px 20px;color:var(--text-muted);">
+            <div style="font-size:36px;opacity:0.3;margin-bottom:12px;">✂️</div>
+            <div style="font-size:14px;">Создайте или выберите проект слева</div>
+          </div>
+          <div id="cut-upload-area" style="display:none;">
+            <div class="cut-step">
+              <div class="cut-step-title"><span class="cut-step-num">1</span>Загрузите видео</div>
+              <div class="cut-drop-zone" id="cut-drop-zone"
+                ondragover="event.preventDefault();this.classList.add('drag-over')"
+                ondragleave="this.classList.remove('drag-over')"
+                ondrop="cutHandleDrop(event)"
+                onclick="document.getElementById('cut-file-input').click()">
+                <input type="file" id="cut-file-input" accept="video/mp4,video/quicktime,video/x-msvideo,video/webm,.mp4,.mov,.avi,.webm" style="display:none;" onchange="cutHandleFile(this.files[0])">
+                <div class="cut-drop-icon">🎬</div>
+                <div class="cut-drop-text">Перетащите видео или нажмите</div>
+                <div class="cut-drop-hint">MP4, MOV, AVI, WebM</div>
+              </div>
+              <div id="cut-upload-status" style="margin-top:10px;display:none;">
+                <div class="cut-status working" id="cut-upload-badge">⏳ Загрузка...</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="cut-wtab-panel" id="cut-panel-transcribe">
+          <div class="cut-step">
+            <div class="cut-step-title"><span class="cut-step-num">2</span>Транскрибировать видео</div>
+            <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px;">Whisper преобразует речь в текст с временными метками. Требуется OpenAI API ключ.</p>
+            <button class="cut-btn cut-btn-primary" onclick="cutTranscribe()" id="cut-transcribe-btn">🎙 Транскрибировать</button>
+            <div id="cut-transcribe-status" style="margin-top:10px;"></div>
+            <div id="cut-transcript-box" style="margin-top:14px;display:none;">
+              <span class="cut-label">Транскрипция</span>
+              <div class="cut-transcript-box" id="cut-transcript-text"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="cut-wtab-panel" id="cut-panel-cuts">
+          <div class="cut-step">
+            <div class="cut-step-title"><span class="cut-step-num">3</span>Умная нарезка</div>
+            <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px;">AI проанализирует транскрипцию и найдёт самые интересные моменты.</p>
+            <button class="cut-btn cut-btn-primary" onclick="cutAnalyze()" id="cut-analyze-btn">✂️ Умная нарезка</button>
+            <div id="cut-analyze-status" style="margin-top:10px;"></div>
+            <div id="cut-cuts-list" style="margin-top:16px;"></div>
+            <div id="cut-execute-row" style="display:none;margin-top:12px;">
+              <button class="cut-btn cut-btn-primary" onclick="cutExecute()" id="cut-execute-btn">🎬 Применить нарезку</button>
+              <div id="cut-execute-status" style="margin-top:10px;"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="cut-wtab-panel" id="cut-panel-gallery">
+          <div id="cut-gallery-empty" style="text-align:center;padding:60px 20px;color:var(--text-muted);">
+            <div style="font-size:36px;opacity:0.3;margin-bottom:12px;">🎞</div>
+            <div>Готовые клипы появятся здесь после нарезки</div>
+          </div>
+          <div class="cut-gallery-grid" id="cut-gallery-grid" style="display:none;"></div>
+        </div>
+
+      </div><!-- /cut-work-col -->
+    </div><!-- /page-wip-cut -->
+
   </div><!-- /content -->
 </div><!-- /main -->
 
@@ -1334,6 +1323,7 @@ const pageMeta = {
   'wip-logs':     { title: 'Логи задач',         badge: 'badge-wip',  label: 'В работе'  },
   'wip-api':      { title: 'Настройки API',      badge: 'badge-wip',  label: 'В работе'  },
   'wip-video':    { title: 'Видео',              badge: 'badge-wip',  label: 'В работе'  },
+  'wip-cut':      { title: 'Видео нарезка',      badge: 'badge-wip',  label: 'В работе'  },
   'todo-seo':     { title: 'SEO-инструменты',   badge: 'badge-todo', label: 'Не готово' },
   'todo-reports': { title: 'Отчёты',             badge: 'badge-todo', label: 'Не готово' },
   'todo-auth':    { title: 'Авторизация',        badge: 'badge-todo', label: 'Не готово' },
