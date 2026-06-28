@@ -1247,6 +1247,7 @@
           <button class="cut-wtab-btn" id="cut-tab-btn-transcribe" onclick="cutSwitchTab('transcribe', this)">2 Транскрипция</button>
           <button class="cut-wtab-btn" id="cut-tab-btn-cuts" onclick="cutSwitchTab('cuts', this)">3 Нарезка</button>
           <button class="cut-wtab-btn" onclick="cutSwitchTab('gallery', this); cutGalleryLoad();">4 Галерея</button>
+          <button class="cut-wtab-btn" onclick="cutSwitchTab('files', this); cutFilesLoad();">📁 Файлы</button>
         </div>
 
         <div class="cut-wtab-panel active" id="cut-panel-upload">
@@ -1307,6 +1308,20 @@
             <div>Готовые клипы появятся здесь после нарезки</div>
           </div>
           <div class="cut-gallery-grid" id="cut-gallery-grid" style="display:none;"></div>
+        </div>
+
+        <!-- Files library tab -->
+        <div class="cut-wtab-panel" id="cut-panel-files">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+            <div style="font-size:14px;font-weight:600;">Библиотека оригиналов</div>
+            <button class="cut-btn cut-btn-primary" onclick="cutFilesUploadNew()" style="padding:5px 12px;font-size:12px;">+ Загрузить видео</button>
+          </div>
+          <input type="file" id="cut-lib-file-input" accept="video/mp4,video/quicktime,video/x-msvideo,video/webm" style="display:none;" onchange="cutFilesHandleNew(this.files[0])">
+          <div id="cut-files-empty" style="text-align:center;padding:60px 20px;color:var(--text-muted);">
+            <div style="font-size:36px;opacity:0.3;margin-bottom:12px;">📁</div>
+            <div>Загруженные видео появятся здесь</div>
+          </div>
+          <div id="cut-files-list" style="display:flex;flex-direction:column;gap:8px;"></div>
         </div>
 
       </div><!-- /cut-work-col -->
@@ -2775,6 +2790,16 @@ function cutProjSelect(id) {
     document.getElementById('cut-execute-row').style.display = 'none';
   }
 }
+function cutProjRename(id) {
+  const proj = cutProjects.find(p => p.id === id);
+  if (!proj) return;
+  const newName = prompt('Новое название проекта:', proj.name);
+  if (!newName || !newName.trim()) return;
+  proj.name = newName.trim();
+  cutProjSave();
+  cutProjRender();
+}
+
 function cutProjRender() {
   cutProjLoad();
   const list = document.getElementById('cut-proj-list');
@@ -2785,7 +2810,8 @@ function cutProjRender() {
   list.innerHTML = cutProjects.map(p => `
     <div class="vproj-item ${p.id === cutCurrentId ? 'active' : ''}" onclick="cutProjSelect('${p.id}')">
       <span style="font-size:14px;">✂️</span>
-      <span class="vproj-item-name">${p.name}</span>
+      <span class="vproj-item-name" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.name}</span>
+      <button class="vproj-del-btn" onclick="event.stopPropagation();cutProjRename('${p.id}')" title="Переименовать" style="opacity:0.6;font-size:10px;margin-right:2px;">✏️</button>
       <button class="vproj-del-btn" onclick="event.stopPropagation();cutProjDelete('${p.id}')" title="Удалить">✕</button>
     </div>
   `).join('');
@@ -2802,6 +2828,66 @@ function cutProjDelete(id) {
     document.getElementById('cut-video-info').style.display = 'none';
   }
   cutProjRender();
+}
+
+// ── Файловая библиотека ──
+async function cutFilesLoad() {
+  if (!cutCurrentId) {
+    document.getElementById('cut-files-empty').style.display = 'block';
+    document.getElementById('cut-files-list').innerHTML = '';
+    document.getElementById('cut-files-empty').querySelector('div:last-child').textContent = 'Выберите проект слева';
+    return;
+  }
+  const r = await fetch(`/api/cut/projects/${cutCurrentId}/files`);
+  const d = await r.json();
+  const empty = document.getElementById('cut-files-empty');
+  const list = document.getElementById('cut-files-list');
+  if (!d.ok || !d.files.length) {
+    empty.style.display = 'block';
+    empty.querySelector('div:last-child').textContent = 'Загруженные видео появятся здесь';
+    list.innerHTML = '';
+    return;
+  }
+  empty.style.display = 'none';
+  list.innerHTML = d.files.map(f => {
+    const sizeMb = (f.size / 1024 / 1024).toFixed(1);
+    const date = new Date(f.mtime).toLocaleDateString('ru');
+    return `<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:8px;padding:12px 14px;display:flex;align-items:center;gap:12px;">
+      <div style="font-size:28px;opacity:0.6;">🎬</div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${f.filename}</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:3px;">${sizeMb} МБ · ${date}</div>
+      </div>
+      <div style="display:flex;gap:6px;">
+        <a href="${f.url}" download="${f.filename}" style="padding:5px 10px;background:var(--card-bg);border:1px solid var(--border);border-radius:6px;font-size:11px;color:var(--text-muted);text-decoration:none;cursor:pointer;" title="Скачать">⬇️</a>
+        <button onclick="cutFilesUseAsSource('${f.url}','${f.filename}')" style="padding:5px 10px;background:rgba(108,99,255,0.15);border:1px solid rgba(108,99,255,0.3);border-radius:6px;font-size:11px;color:var(--accent);cursor:pointer;" title="Использовать для нарезки">✂️ Нарезать</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function cutFilesUploadNew() {
+  document.getElementById('cut-lib-file-input').click();
+}
+
+async function cutFilesHandleNew(file) {
+  if (!file) return;
+  if (!cutCurrentId) { alert('Сначала выберите проект слева'); return; }
+  // Reuse existing cutHandleFile logic
+  await cutHandleFile(file);
+  cutFilesLoad();
+}
+
+function cutFilesUseAsSource(url, filename) {
+  // Switch to upload tab and show file as already loaded
+  cutSwitchTab('upload', document.querySelector('.cut-wtab-btn'));
+  document.getElementById('cut-no-proj-msg').style.display = 'none';
+  document.getElementById('cut-upload-area').style.display = 'block';
+  document.getElementById('cut-video-info').style.display = 'block';
+  document.getElementById('cut-info-name').textContent = filename;
+  document.getElementById('cut-info-dur').textContent = '—';
+  document.getElementById('cut-info-size').textContent = '';
+  cutSwitchTab('transcribe', document.querySelectorAll('.cut-wtab-btn')[1]);
 }
 
 function cutSetFormat(fmt) {

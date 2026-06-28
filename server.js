@@ -218,40 +218,43 @@ async function openaiImageEdit(base64, prompt, openaiKey, size = '1024x1024') {
   if (buf.length > 3.9 * 1024 * 1024) throw new Error('Изображение слишком большое (>4MB). Сожмите перед обработкой.');
 
   const blob = new Blob([buf], { type: mime });
-  const form = new FormData();
-  form.append('image', blob, 'image.' + ext);
-  form.append('prompt', prompt);
-  form.append('model', 'gpt-image-1');
-  form.append('n', '1');
-  form.append('size', size);
-  form.append('response_format', 'b64_json');
-  let r = await fetch('https://api.openai.com/v1/images/edits', {
-    method: 'POST',
-    headers: { 'Authorization': 'Bearer ' + openaiKey },
-    body: form
-  });
-  let data = await r.json();
-  // Fallback to dall-e-2 if gpt-image-1 unavailable
-  if (data.error && (data.error.code === 'model_not_found' || data.error.status === 404 || r.status >= 500)) {
-    const form2 = new FormData();
-    form2.append('image', blob, 'image.' + ext);
-    form2.append('prompt', prompt.slice(0, 1000));
-    form2.append('model', 'dall-e-2');
-    form2.append('n', '1');
-    form2.append('size', '1024x1024');
-    form2.append('response_format', 'b64_json');
-    r = await fetch('https://api.openai.com/v1/images/edits', {
+
+  const tryEdit = async (model, extraParams = {}) => {
+    const form = new FormData();
+    form.append('image', blob, 'image.' + ext);
+    form.append('prompt', prompt.slice(0, model === 'dall-e-2' ? 1000 : 32000));
+    form.append('model', model);
+    form.append('n', '1');
+    form.append('size', model === 'dall-e-2' ? '1024x1024' : size);
+    // dall-e-2 needs response_format; gpt-image-1 does NOT accept it
+    if (model === 'dall-e-2') form.append('response_format', 'b64_json');
+    Object.entries(extraParams).forEach(([k, v]) => form.append(k, v));
+    const r = await fetch('https://api.openai.com/v1/images/edits', {
       method: 'POST',
       headers: { 'Authorization': 'Bearer ' + openaiKey },
-      body: form2
+      body: form
     });
-    data = await r.json();
+    return { r, data: await r.json() };
+  };
+
+  let { r, data } = await tryEdit('gpt-image-1');
+  // Fallback to dall-e-2 on any error
+  if (data.error) {
+    ({ r, data } = await tryEdit('dall-e-2'));
   }
   if (data.error) throw new Error(data.error.message);
-  const b64 = data.data?.[0]?.b64_json;
+  const b64 = data.data?.[0]?.b64_json || data.data?.[0]?.url;
   if (!b64) throw new Error('Нет данных изображения в ответе: ' + JSON.stringify(data).slice(0, 200));
+  // If URL returned (dall-e-2 default), fetch it
+  let imgBuf;
+  if (b64.startsWith('http')) {
+    const ir = await fetch(b64);
+    imgBuf = Buffer.from(await ir.arrayBuffer());
+  } else {
+    imgBuf = Buffer.from(b64, 'base64');
+  }
   const filename = Date.now() + '_' + Math.random().toString(36).slice(2) + '.png';
-  fs.writeFileSync(path.join(VREF_PROCESSED_DIR, filename), Buffer.from(b64, 'base64'));
+  fs.writeFileSync(path.join(VREF_PROCESSED_DIR, filename), imgBuf);
   return '/vref-processed/' + filename;
 }
 
@@ -782,6 +785,22 @@ app.post('/api/cut/execute', async (req, res) => {
     }
 
     res.json({ ok: true, clips: resultClips });
+  } catch (e) {
+    res.json({ ok: false, error: e.message });
+  }
+});
+
+// GET /api/cut/projects/:projectId/files — список оригинальных файлов проекта
+app.get('/api/cut/projects/:projectId/files', (req, res) => {
+  try {
+    const dir = path.join(__dirname, 'data', 'cut-uploads', req.params.projectId);
+    if (!fs.existsSync(dir)) return res.json({ ok: true, files: [] });
+    const files = fs.readdirSync(dir).filter(f => f.startsWith('original.')).map(f => {
+      const fp = path.join(dir, f);
+      const stat = fs.statSync(fp);
+      return { filename: f, size: stat.size, mtime: stat.mtimeMs, url: `/cut-files/${req.params.projectId}/${f}` };
+    });
+    res.json({ ok: true, files });
   } catch (e) {
     res.json({ ok: false, error: e.message });
   }
