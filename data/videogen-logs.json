@@ -1,0 +1,10 @@
+[
+  {
+    "taskId": "3986aaba09932814e3d2ce9fa690a3bf",
+    "model": "gemini-omni-video",
+    "state": "processing",
+    "createdAt": "2026-06-28T00:00:00.000Z",
+    "input": "{\"prompt\":\"(отправлено напрямую в KIE)\",\"resolution\":\"720p\",\"aspect_ratio\":\"16:9\",\"duration\":\"5\"}",
+    "resultJson": null
+  }
+]

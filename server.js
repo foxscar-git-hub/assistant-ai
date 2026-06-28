@@ -269,18 +269,42 @@ Rewrite into an optimized ${modelName} video generation prompt. Include precise 
 // ── KIE: логи задач (история) — local + KIE merged ──
 app.get('/api/kie/logs', async (req, res) => {
   const localLogs = localLogsRead();
+  const reqKey = req.headers['x-kie-key'] || kieKey();
+
+  // Auto-update status of local pending tasks
+  if (reqKey) {
+    const pending = localLogs.filter(l => l.state === 'processing');
+    await Promise.all(pending.map(async (l) => {
+      try {
+        const d = await kieGet('/jobs/recordInfo?taskId=' + l.taskId, reqKey);
+        const task = d.data || d;
+        if (task.state === 'success' || task.state === 'fail') {
+          localLogUpdate(l.taskId, {
+            state: task.state,
+            resultJson: task.resultJson || null,
+            creditsConsumed: task.creditsConsumed,
+            failMsg: task.failMsg || null,
+            model: task.model || l.model,
+            createdAt: task.createdAt || l.createdAt,
+          });
+        }
+      } catch {}
+    }));
+  }
+
+  const updatedLocal = localLogsRead();
+  if (!reqKey) return res.json({ ok: true, logs: updatedLocal });
+
   try {
-    const reqKey = req.headers['x-kie-key'] || kieKey();
-    if (!reqKey) return res.json({ ok: true, logs: localLogs });
     const data = await kieGet('/jobs/records?page=1&pageSize=50', reqKey);
-    if (data?.code === 401 || data?.code === 403) return res.json({ ok: true, logs: localLogs });
+    if (data?.code === 401 || data?.code === 403) return res.json({ ok: true, logs: updatedLocal });
     const kieLogs = data?.data?.list || data?.data?.records || (Array.isArray(data?.data) ? data.data : []);
-    // Merge: KIE entries override local by taskId (KIE has full data); local entries not in KIE stay on top
+    // Local entries not yet in KIE (very recent) appear first
     const kieIds = new Set(kieLogs.map(l => l.taskId));
-    const onlyLocal = localLogs.filter(l => !kieIds.has(l.taskId));
+    const onlyLocal = updatedLocal.filter(l => !kieIds.has(l.taskId));
     res.json({ ok: true, logs: [...onlyLocal, ...kieLogs] });
   } catch (e) {
-    res.json({ ok: true, logs: localLogs });
+    res.json({ ok: true, logs: updatedLocal });
   }
 });
 
