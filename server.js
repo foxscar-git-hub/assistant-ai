@@ -282,7 +282,17 @@ app.post('/api/videogen', async (req, res) => {
     else if (modelType === 'omni') modelId = MODEL_IDS.omni_video;
     else modelId = quality === 'pro' ? MODEL_IDS.seedance_pro : MODEL_IDS.seedance_fast;
 
-    const input = { prompt, resolution, aspect_ratio, duration: String(parseInt(duration)), nsfw_checker: true };
+    // Normalize resolution per model requirements
+    let resolNorm = resolution;
+    if (modelType === 'omni') {
+      // Omni: 720P / 1080P / 4k (capital P, no 480p)
+      const map = { '480p': '720P', '720p': '720P', '1080p': '1080P', '4k': '4k', '4K': '4k' };
+      resolNorm = map[resolution] || '720P';
+    } else if (modelType === 'veo') {
+      // Veo: 720p / 1080p only
+      resolNorm = resolution === '1080p' ? '1080p' : '720p';
+    }
+    const input = { prompt, resolution: resolNorm, aspect_ratio, duration: String(parseInt(duration)), nsfw_checker: true };
     if (image_url) input.first_frame_url = image_url;
     if (end_image_url) input.last_frame_url = end_image_url;
     const data = await kiePost('/jobs/createTask', { model: modelId, input }, reqKey);
