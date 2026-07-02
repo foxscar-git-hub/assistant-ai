@@ -632,14 +632,20 @@ app.post('/api/cut/transcribe', async (req, res) => {
     if (!files.length) return res.json({ ok: false, error: 'Видео не найдено. Загрузите файл.' });
     const videoPath = path.join(dir, files[0]);
 
-    // Build FormData with file blob
-    const fileBuffer = fs.readFileSync(videoPath);
-    const ext = path.extname(files[0]).replace('.', '') || 'mp4';
-    const mimeMap = { mp4: 'video/mp4', mov: 'video/quicktime', avi: 'video/x-msvideo', webm: 'video/webm' };
-    const mime = mimeMap[ext] || 'video/mp4';
+    // Extract compressed mono audio: video can exceed Node's 2 GiB buffer limit,
+    // and Whisper API accepts max 25 MB anyway
+    const audioPath = path.join(dir, 'whisper-audio.mp3');
+    if (!fs.existsSync(audioPath)) {
+      await ffmpegExec(['-y', '-i', videoPath, '-vn', '-ac', '1', '-ar', '16000', '-b:a', '32k', audioPath]);
+    }
+    const audioSize = fs.statSync(audioPath).size;
+    if (audioSize > 25 * 1024 * 1024) {
+      return res.json({ ok: false, error: `Аудиодорожка ${(audioSize / 1024 / 1024).toFixed(1)} МБ превышает лимит Whisper 25 МБ. Видео слишком длинное — разбейте его на части.` });
+    }
+    const fileBuffer = fs.readFileSync(audioPath);
 
     const form = new FormData();
-    form.append('file', new Blob([fileBuffer], { type: mime }), files[0]);
+    form.append('file', new Blob([fileBuffer], { type: 'audio/mpeg' }), 'whisper-audio.mp3');
     form.append('model', 'whisper-1');
     form.append('response_format', 'verbose_json');
 
