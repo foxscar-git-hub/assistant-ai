@@ -790,6 +790,13 @@ app.post('/api/cut/execute', async (req, res) => {
       resultClips.push({ path: outPath, url, title: cut.title || `Клип ${i + 1}` });
     }
 
+    // Save clip titles so the gallery can show meaningful names
+    const metaPath = path.join(clipsDir, 'meta.json');
+    let meta = {};
+    try { meta = JSON.parse(fs.readFileSync(metaPath, 'utf8')); } catch {}
+    resultClips.forEach(c => { meta[path.basename(c.path)] = c.title; });
+    fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2));
+
     res.json({ ok: true, clips: resultClips });
   } catch (e) {
     res.json({ ok: false, error: e.message });
@@ -817,13 +824,37 @@ app.get('/api/cut/projects/:projectId/clips', (req, res) => {
   try {
     const clipsDir = path.join(__dirname, 'data', 'cut-uploads', req.params.projectId, 'clips');
     if (!fs.existsSync(clipsDir)) return res.json({ ok: true, clips: [] });
+    let meta = {};
+    try { meta = JSON.parse(fs.readFileSync(path.join(clipsDir, 'meta.json'), 'utf8')); } catch {}
     const files = fs.readdirSync(clipsDir).filter(f => f.endsWith('.mp4')).sort();
     const clips = files.map(f => ({
       filename: f,
       url: `/cut-files/${req.params.projectId}/clips/${f}`,
-      title: f.replace('.mp4', '').replace(/_/g, ' '),
+      title: meta[f] || f.replace('.mp4', '').replace(/_/g, ' '),
+      mtime: fs.statSync(path.join(clipsDir, f)).mtimeMs,
     }));
     res.json({ ok: true, clips });
+  } catch (e) {
+    res.json({ ok: false, error: e.message });
+  }
+});
+
+// DELETE /api/cut/projects/:projectId/clips/:filename — удалить клип с диска
+app.delete('/api/cut/projects/:projectId/clips/:filename', (req, res) => {
+  try {
+    const filename = path.basename(req.params.filename);
+    if (!/^[\w.-]+\.mp4$/.test(filename)) return res.json({ ok: false, error: 'Некорректное имя файла' });
+    const clipsDir = path.join(__dirname, 'data', 'cut-uploads', path.basename(req.params.projectId), 'clips');
+    const fp = path.join(clipsDir, filename);
+    if (!fs.existsSync(fp)) return res.json({ ok: false, error: 'Файл не найден' });
+    fs.unlinkSync(fp);
+    const metaPath = path.join(clipsDir, 'meta.json');
+    try {
+      const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+      delete meta[filename];
+      fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2));
+    } catch {}
+    res.json({ ok: true });
   } catch (e) {
     res.json({ ok: false, error: e.message });
   }

@@ -3108,18 +3108,46 @@ async function cutGalleryLoad() {
     }
     empty.style.display = 'none';
     grid.style.display = 'grid';
-    grid.innerHTML = d.clips.map(c => `
+    // Fallback titles for clips cut before meta.json existed: take them from saved analysis
+    const proj = cutProjects.find(p => p.id === cutCurrentId);
+    const savedCuts = proj?.cuts || [];
+    grid.innerHTML = d.clips.map(c => {
+      let title = c.title;
+      const m = c.filename.match(/^clip_(\d+)\.mp4$/);
+      if (m && title === c.filename.replace('.mp4', '').replace(/_/g, ' ') && savedCuts[m[1] - 1]?.title) {
+        title = savedCuts[m[1] - 1].title;
+      }
+      const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+      // Download name: DD_MM_Meaningful_title.mp4 (date = clip creation time)
+      const cd = new Date(c.mtime || Date.now());
+      const dlName = String(cd.getDate()).padStart(2, '0') + '_' + String(cd.getMonth() + 1).padStart(2, '0') + '_'
+        + title.replace(/[\/\\:*?"<>|«»]/g, '').trim().replace(/\s+/g, '_').slice(0, 80) + '.mp4';
+      return `
       <div class="cut-clip-card">
         <video src="${c.url}" controls preload="metadata" style="max-height:180px;"></video>
         <div class="cut-clip-card-body">
-          <span class="cut-clip-title">${c.title}</span>
-          <a href="${c.url}" download style="background:none;border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:11px;font-weight:600;color:var(--text-muted);text-decoration:none;flex-shrink:0;transition:color .15s;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-muted)'">↓</a>
+          <span class="cut-clip-title" title="${esc(title)}">${esc(title)}</span>
+          <a href="${c.url}" download="${esc(dlName)}" style="background:none;border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:11px;font-weight:600;color:var(--text-muted);text-decoration:none;flex-shrink:0;transition:color .15s;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-muted)'">↓</a>
+          <button onclick="cutClipDelete('${esc(c.filename)}')" title="Удалить клип с диска" style="background:none;border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:11px;font-weight:600;color:var(--text-muted);cursor:pointer;flex-shrink:0;transition:color .15s;" onmouseover="this.style.color='#e5484d'" onmouseout="this.style.color='var(--text-muted)'">🗑</button>
         </div>
-      </div>
-    `).join('');
+      </div>`;
+    }).join('');
   } catch (e) {
     grid.style.display = 'none';
     empty.style.display = 'block';
+  }
+}
+
+async function cutClipDelete(filename) {
+  if (!cutCurrentId) return;
+  if (!confirm('Удалить клип «' + filename + '» с диска? Это действие необратимо.')) return;
+  try {
+    const r = await fetch('/api/cut/projects/' + encodeURIComponent(cutCurrentId) + '/clips/' + encodeURIComponent(filename), { method: 'DELETE' });
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error || 'Не удалось удалить');
+    cutGalleryLoad();
+  } catch (e) {
+    alert('Ошибка удаления: ' + e.message);
   }
 }
 
