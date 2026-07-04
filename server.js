@@ -1414,41 +1414,56 @@ function ytdlpExec(args, timeoutMs = 300000) {
   });
 }
 
-// POST /api/era/yt-list { count = 500 } — добавить последние N видео канала в базу (канал целиком — обычно несколько сотен роликов)
+// POST /api/era/yt-list — добавить в базу все новые видео канала (канал целиком — несколько сотен роликов)
+// Шаг 1: --flat-playlist быстро (~1 мин) даёт ID всех видео канала, без даты/названия на русском.
+// Шаг 2: полную карточку (дата, длительность, оригинальный заголовок) тянем только для реально новых ID —
+// иначе на канале из 300+ роликов полное сканирование занимает много минут при каждом клике.
 app.post('/api/era/yt-list', async (req, res) => {
   try {
-    const count = Math.min(Number(req.body?.count) || 500, 2000);
-    const out = await ytdlpExec([
-      '--playlist-end', String(count), '--skip-download', '--no-warnings',
-      '--print', '%(id)s\t%(upload_date)s\t%(duration)s\t%(title)s',
-      ERA_CHANNEL,
-    ], 600000);
     const list = eraLoadArticles();
     const known = new Set(list.map(a => a.slug));
+
+    const idsOut = await ytdlpExec([
+      '--flat-playlist', '--skip-download', '--no-warnings',
+      '--print', '%(id)s',
+      ERA_CHANNEL,
+    ], 300000);
+    const allIds = [...new Set(idsOut.trim().split('\n').filter(Boolean))];
+    const newIds = allIds.filter(id => !known.has('yt-' + id));
+
     let added = 0;
-    for (const line of out.trim().split('\n')) {
-      const [id, ud, dur, ...t] = line.split('\t');
-      if (!id || known.has('yt-' + id)) continue;
-      const date = ud && ud.length === 8 ? `${ud.slice(6, 8)}.${ud.slice(4, 6)}.${ud.slice(0, 4)}` : '';
-      list.push({
-        slug: 'yt-' + id,
-        title: (t.join('\t') || id).trim(),
-        date,
-        category: 'youtube',
-        categoryName: 'YouTube-канал',
-        url: 'https://www.youtube.com/watch?v=' + id,
-        source: 'youtube',
-        videoId: id,
-        duration: Number(dur) || null,
-        hasText: fs.existsSync(path.join(ERA_TEXTS_DIR, 'yt-' + id + '.txt')),
-        locked: false,
-      });
-      added++;
+    if (newIds.length) {
+      const urls = newIds.map(id => 'https://www.youtube.com/watch?v=' + id);
+      const out = await ytdlpExec([
+        '--skip-download', '--no-warnings', '--ignore-errors',
+        '--print', '%(id)s\t%(upload_date)s\t%(duration)s\t%(title)s',
+        ...urls,
+      ], 1200000);
+      for (const line of out.trim().split('\n')) {
+        const [id, ud, dur, ...t] = line.split('\t');
+        if (!id || known.has('yt-' + id)) continue;
+        const date = ud && ud.length === 8 ? `${ud.slice(6, 8)}.${ud.slice(4, 6)}.${ud.slice(0, 4)}` : '';
+        list.push({
+          slug: 'yt-' + id,
+          title: (t.join('\t') || id).trim(),
+          date,
+          category: 'youtube',
+          categoryName: 'YouTube-канал',
+          url: 'https://www.youtube.com/watch?v=' + id,
+          source: 'youtube',
+          videoId: id,
+          duration: Number(dur) || null,
+          hasText: fs.existsSync(path.join(ERA_TEXTS_DIR, 'yt-' + id + '.txt')),
+          locked: false,
+        });
+        known.add('yt-' + id);
+        added++;
+      }
     }
     const key = d => (d || '').split('.').reverse().join('');
     list.sort((a, b) => key(b.date).localeCompare(key(a.date)));
     eraSaveArticles(list);
-    res.json({ ok: true, added, total: list.filter(a => a.source === 'youtube').length });
+    res.json({ ok: true, added, scanned: allIds.length, total: list.filter(a => a.source === 'youtube').length });
   } catch (e) {
     res.json({ ok: false, error: e.message });
   }
