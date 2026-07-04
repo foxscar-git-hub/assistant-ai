@@ -359,11 +359,12 @@ Rules:
   • viral: "Fast-cut viral social media video, high-energy multi-shot, trending aesthetic, dopamine-paced editing"
   • cartoon: "Animated cartoon style, vibrant colors, stylized characters, smooth 2D animation"
   • documentary: "Single continuous observational shot, naturalistic handheld, documentary realism"
+  • ugc: "Single continuous handheld selfie-style shot, raw UGC content-creator video shot on a phone front camera, imperfect framing, natural handshake, unpolished home/room/outdoor setting, no professional lighting rig or crew"
 - Use EXACT time markers for ${duration}s: ${buildTimeMarkers(duration)}
-- Use cinematic camera language: dolly, tilt, arc, crane, handheld, rack focus, whip pan
+- Use cinematic camera language: dolly, tilt, arc, crane, handheld, rack focus, whip pan (for ugc: keep it to natural handheld micro-movements only, no crane/dolly)
 - Describe lighting, textures, atmosphere in vivid detail
-- Add audio description LAST: ambient sounds, music tone, SFX
-- End with style tags: "photorealistic, 35mm film grain, ARRI ALEXA aesthetic, no 3D, no cartoon" (skip for cartoon format)
+${format === 'ugc' ? '- The creator talks directly to camera the whole time — genuine excited reaction, casual conversational tone, like unboxing/reviewing the product for friends; end on an engaging call-to-action (e.g. "grab yours now", "link in bio", "trust me on this one")\n' : ''}- Add audio description LAST: ambient sounds, music tone, SFX
+- End with style tags: "photorealistic, 35mm film grain, ARRI ALEXA aesthetic, no 3D, no cartoon" (skip for cartoon and ugc formats — ugc should end with "shot on iPhone front camera, authentic UGC aesthetic, no cinematic grading" instead)
 - Output ONLY the prompt text in English. No explanations. No intro lines.`,
 
   veo: (duration, format) => `You are an expert video prompt engineer for Google Veo 3.
@@ -379,6 +380,7 @@ Rules:
     format === 'cartoon' ? 'animated style, bright colors, describe as animation' :
     format === 'documentary' ? 'observational, authentic, real-world setting' :
     format === 'ad' ? 'product-focused, aspirational, clean and polished' :
+    format === 'ugc' ? 'raw handheld selfie-style UGC review/unboxing video shot on a phone front camera, creator talking directly to camera the whole time, genuine excited reaction, casual authentic home setting, imperfect natural lighting, NOT cinematic or polished; end on an engaging call-to-action' :
     'cinematic quality, dramatic lighting, professional'
   }
 - Describe visual style, color palette, lighting explicitly
@@ -395,9 +397,10 @@ Rules:
     format === 'cartoon' ? 'animation style, stylized visuals, bright palette' :
     format === 'documentary' ? 'naturalistic realism, observational perspective' :
     format === 'ad' ? 'product spotlight, clean composition, aspirational' :
+    format === 'ugc' ? 'raw handheld selfie-style UGC review/unboxing, creator talking directly to camera the whole time, genuine excited reaction, casual authentic home setting, imperfect natural lighting, NOT cinematic or polished; end on an engaging call-to-action' :
     'cinematic depth, professional lighting'
   }
-- AUDIO/VOICEOVER: The voiceover and any spoken dialogue MUST be in Russian language. Describe voiceover text in Russian directly in the prompt (e.g. "Голос за кадром: «текст на русском»"). Background music and sound effects describe in English.
+- AUDIO/VOICEOVER: The voiceover and any spoken dialogue MUST be in Russian language. Describe voiceover text in Russian directly in the prompt (e.g. "Голос за кадром: «текст на русском»"). Background music and sound effects describe in English. ${format === 'ugc' ? 'For UGC: write the creator\'s spoken lines in Russian as natural casual speech (not scripted-sounding), including the closing call-to-action line.' : ''}
 - English text overlays are allowed if they add value
 - Describe mood, emotional tone, atmosphere
 - Output ONLY the prompt text in English (except Russian voiceover lines). No explanations.`,
@@ -405,7 +408,7 @@ Rules:
 
 const FORMAT_NAMES = {
   cinematic: 'Cinematic', viral: 'Viral Social Media', cartoon: 'Animated Cartoon',
-  documentary: 'Documentary', ad: 'Advertisement',
+  documentary: 'Documentary', ad: 'Advertisement', ugc: 'UGC Creator Review',
 };
 
 app.post('/api/enhance-prompt', async (req, res) => {
