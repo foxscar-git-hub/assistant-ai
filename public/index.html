@@ -1015,9 +1015,12 @@
 
                     <!-- Prompt -->
                     <div>
-                      <label style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;display:flex;align-items:center;gap:6px;margin-bottom:6px;">prompt <span style="color:#ef4444;">*</span></label>
+                      <label style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;display:flex;align-items:center;gap:6px;margin-bottom:6px;">prompt <span style="color:#ef4444;">*</span>
+                        <button id="vgen-idea-btn" onclick="vgenGenerateIdea()" style="margin-left:auto;background:rgba(108,99,255,0.15);border:1px solid rgba(108,99,255,0.4);border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700;color:var(--accent);cursor:pointer;text-transform:none;letter-spacing:normal;" title="Придумать идею ролика по товару, формату и длительности">💡 Идея</button>
+                      </label>
                       <textarea id="vgen-prompt" placeholder="Опишите видео которое хотите создать..."
                         style="width:100%;min-height:90px;background:var(--card-bg);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-size:13px;resize:vertical;font-family:inherit;outline:none;line-height:1.5;"
+                        oninput="vgenUpdateIdeaBtnState()"
                         onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"></textarea>
                       <!-- Кнопка улучшить промт -->
                       <div style="margin-top:6px;display:flex;align-items:center;gap:8px;">
@@ -1383,7 +1386,7 @@
           <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
             <button class="cut-btn cut-btn-primary" onclick="eraScrapeList()" id="era-scrape-list-btn" style="font-size:12px;">📥 Обновить список статей</button>
             <button class="cut-btn cut-btn-secondary" onclick="eraScrapeTexts()" id="era-scrape-texts-btn" style="font-size:12px;">📄 Скачать тексты (30 за раз)</button>
-            <button class="cut-btn cut-btn-secondary" onclick="eraYtImport()" id="era-yt-import-btn" style="font-size:12px;">▶️ Импортировать видео (10)</button>
+            <button class="cut-btn cut-btn-secondary" onclick="eraYtImport()" id="era-yt-import-btn" style="font-size:12px;">▶️ Импортировать все видео</button>
             <button class="cut-btn cut-btn-secondary" onclick="eraYtTranscribeAll()" id="era-yt-transcribe-btn" style="font-size:12px;">🎙 Транскрибировать все видео</button>
             <select id="era-cat-filter" onchange="eraRenderArticles()" style="font-size:12px;background:var(--bg-panel);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:5px 8px;">
               <option value="">Все категории</option>
@@ -2147,6 +2150,7 @@ function vgenHistoryRestore(id) {
   // Restore prompt
   const promptEl = document.getElementById('vgen-prompt');
   if (promptEl && item.prompt) promptEl.value = item.prompt;
+  vgenUpdateIdeaBtnState();
 
   // Restore duration
   const slider = document.getElementById('vgen-dur-slider');
@@ -2295,6 +2299,7 @@ async function vgenEnhancePrompt() {
       promptEl.style.borderColor = 'var(--accent)';
       setTimeout(() => promptEl.style.borderColor = 'var(--border)', 1500);
       if (status) status.textContent = '✓ Готово';
+      vgenUpdateIdeaBtnState();
     } else {
       if (status) status.textContent = '❌ ' + (d.error || 'Ошибка');
     }
@@ -2304,6 +2309,62 @@ async function vgenEnhancePrompt() {
     btn.disabled = false;
     btn.innerHTML = '✨ Улучшить промт';
     setTimeout(() => { if (status) status.style.display = 'none'; }, 3000);
+  }
+}
+
+// ── Кнопка "💡 Идея" — доступна только когда prompt пуст, придумывает креативный
+// концепт ролика на основе выбранного товара/услуги, формата и длительности ──
+function vgenUpdateIdeaBtnState() {
+  const btn = document.getElementById('vgen-idea-btn');
+  const promptEl = document.getElementById('vgen-prompt');
+  if (!btn || !promptEl) return;
+  const empty = !promptEl.value.trim();
+  btn.disabled = !empty;
+  btn.style.opacity = empty ? '1' : '0.4';
+  btn.style.cursor = empty ? 'pointer' : 'not-allowed';
+  btn.title = empty
+    ? 'Придумать идею ролика по товару, формату и длительности'
+    : 'Очистите промпт, чтобы придумать новую идею';
+}
+
+async function vgenGenerateIdea() {
+  const promptEl = document.getElementById('vgen-prompt');
+  const btn = document.getElementById('vgen-idea-btn');
+  if (!promptEl || promptEl.value.trim() || !btn || btn.disabled) return;
+
+  const model = vgenActiveModel || 'seedance';
+  const format = document.querySelector('input[name="vgen-format"]:checked')?.value || 'cinematic';
+  const dur = document.getElementById('vgen-dur-slider')?.value || '5';
+  const productName = wbProducts.find(p => p.id === vActiveCardId)?.name || '';
+
+  const anthropicKey  = localStorage.getItem('anthropic_api_key') || '';
+  const openrouterKey = localStorage.getItem('openrouter_api_key') || '';
+  if (!anthropicKey && !openrouterKey) {
+    alert('Добавьте Anthropic или OpenRouter API ключ в ⚙️ Настройках для генерации идеи');
+    return;
+  }
+
+  const origHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '⏳ Придумываю...';
+  try {
+    const headers = { 'Content-Type': 'application/json' };
+    if (anthropicKey)  headers['x-anthropic-key']  = anthropicKey;
+    if (openrouterKey) headers['x-openrouter-key'] = openrouterKey;
+    const r = await fetch('/api/generate-idea', {
+      method: 'POST', headers,
+      body: JSON.stringify({ model, format, duration: dur, productName }),
+    });
+    const d = await r.json();
+    if (!d.ok || !d.idea) throw new Error(d.error || 'Не удалось придумать идею');
+    promptEl.value = d.idea;
+    promptEl.style.borderColor = 'var(--accent)';
+    setTimeout(() => promptEl.style.borderColor = 'var(--border)', 2000);
+  } catch (e) {
+    alert('Ошибка: ' + e.message);
+  } finally {
+    btn.innerHTML = origHtml;
+    vgenUpdateIdeaBtnState();
   }
 }
 
@@ -2323,6 +2384,7 @@ function vgenGetParam(name) {
 
 function vgenReset() {
   document.getElementById('vgen-prompt').value = '';
+  vgenUpdateIdeaBtnState();
   vgenClearImage('first');
   vgenClearImage('last');
   // reset ratio
@@ -3817,9 +3879,9 @@ async function eraSaveCookie() {
 async function eraYtImport() {
   const btn = document.getElementById('era-yt-import-btn');
   const st = document.getElementById('era-articles-status');
-  btn.disabled = true; st.textContent = '⏳ Получаю список видео...';
+  btn.disabled = true; st.textContent = '⏳ Получаю список всех видео канала (может занять пару минут)...';
   try {
-    const r = await fetch('/api/era/yt-list', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ count: 10 }) });
+    const r = await fetch('/api/era/yt-list', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ count: 500 }) });
     const d = await r.json();
     if (!d.ok) throw new Error(d.error);
     st.textContent = '✓ Добавлено видео: ' + d.added + ', всего видео: ' + d.total;

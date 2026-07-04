@@ -497,6 +497,80 @@ const FORMAT_NAMES = {
   documentary: 'Documentary', ad: 'Advertisement', ugc: 'UGC Creator Review',
 };
 
+// ── Придумать идею ролика (креативный концепт, не технический промпт) ──
+const IDEA_SYSTEM = `You are a world-class creative director for short-form video advertising, famous for viral, attention-grabbing concepts.
+
+Rules:
+- Output ONE specific, vivid creative concept in Russian, 2–4 sentences. This is a creative BRIEF/HOOK, not a technical shot-by-shot video prompt — no camera directions, no time markers.
+- The concept MUST fit the requested format:
+  • viral: reference a real, currently recognizable internet/TikTok/Reels trend, meme structure or challenge format (name it specifically) and adapt it to the product
+  • cinematic: recreate a short, recognizable moment/scene style from a well-known film genre (be specific — genre, mood, or a type of iconic movie scene) reimagined around the product
+  • cartoon: a fun, imaginative animated short-story concept
+  • documentary: a compelling mini human-interest or investigative-style documentary angle
+  • ad: a classic, polished, aspirational commercial concept
+  • ugc: a relatable, everyday-person story or testimonial hook
+- Be concrete and inspiring — a director should get excited reading it, not generic marketing fluff.
+- The idea must be realistically executable within the given duration.
+- Output only the idea itself in Russian. No preamble, no headers, no quotes, no markdown.`;
+
+app.post('/api/generate-idea', async (req, res) => {
+  try {
+    const { model = 'seedance', format = 'cinematic', duration = 5, productName = '' } = req.body || {};
+
+    const anthropicKey  = req.headers['x-anthropic-key'] || process.env.ANTHROPIC_API_KEY || '';
+    const openrouterKey = req.headers['x-openrouter-key'] || process.env.OPENROUTER_API_KEY || '';
+    if (!anthropicKey && !openrouterKey) {
+      return res.json({ ok: false, error: 'Добавьте Anthropic или OpenRouter API ключ в настройках ⚙️' });
+    }
+
+    const modelName = model === 'veo' ? 'Veo 3' : model === 'omni' ? 'Gemini Omni' : 'Seedance 2.0';
+    const formatName = FORMAT_NAMES[format] || format;
+    const userMsg = `Товар: ${productName ? productName : 'товар (конкретное название не указано — придумай под универсальный потребительский продукт)'}
+Формат ролика: ${formatName}
+Длительность: ${duration} секунд
+Модель генерации: ${modelName}
+
+Придумай одну яркую, конкретную креативную идею для короткого рекламного видео с этим товаром.`;
+
+    let idea = '';
+    if (anthropicKey) {
+      const client = new Anthropic({ apiKey: anthropicKey });
+      const message = await client.messages.create({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 400,
+        system: IDEA_SYSTEM,
+        messages: [{ role: 'user', content: userMsg }],
+      });
+      idea = message.content[0]?.text?.trim() || '';
+    } else {
+      const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + openrouterKey,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'http://localhost:3000',
+          'X-Title': 'AI Assistant',
+        },
+        body: JSON.stringify({
+          model: 'anthropic/claude-sonnet-4-5',
+          max_tokens: 400,
+          messages: [
+            { role: 'system', content: IDEA_SYSTEM },
+            { role: 'user', content: userMsg },
+          ],
+        }),
+      });
+      const data = await r.json();
+      idea = data.choices?.[0]?.message?.content?.trim() || '';
+      if (!idea && data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+    }
+    if (!idea) throw new Error('Пустой ответ от модели');
+    res.json({ ok: true, idea });
+  } catch (e) {
+    res.json({ ok: false, error: e.message });
+  }
+});
+
 app.post('/api/enhance-prompt', async (req, res) => {
   try {
     const { prompt, model = 'seedance', format = 'cinematic', duration = 5,
@@ -1331,15 +1405,15 @@ function ytdlpExec(args, timeoutMs = 300000) {
   });
 }
 
-// POST /api/era/yt-list { count = 10 } — добавить последние N видео канала в базу
+// POST /api/era/yt-list { count = 500 } — добавить последние N видео канала в базу (канал целиком — обычно несколько сотен роликов)
 app.post('/api/era/yt-list', async (req, res) => {
   try {
-    const count = Math.min(Number(req.body?.count) || 10, 100);
+    const count = Math.min(Number(req.body?.count) || 500, 2000);
     const out = await ytdlpExec([
       '--playlist-end', String(count), '--skip-download', '--no-warnings',
       '--print', '%(id)s\t%(upload_date)s\t%(duration)s\t%(title)s',
       ERA_CHANNEL,
-    ]);
+    ], 600000);
     const list = eraLoadArticles();
     const known = new Set(list.map(a => a.slug));
     let added = 0;
