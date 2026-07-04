@@ -398,10 +398,17 @@ app.get('/api/wb/products', (req, res) => {
 
 app.post('/api/wb/products', async (req, res) => {
   try {
-    const { projectId, url } = req.body || {};
+    const { projectId, url, name } = req.body || {};
     if (!projectId) return res.json({ ok: false, error: 'projectId обязателен' });
-    if (!url) return res.json({ ok: false, error: 'Ссылка не передана' });
-    const card = await wbFetchCard(url);
+    let card;
+    if (url) {
+      card = { type: 'wb', ...(await wbFetchCard(url)) };
+    } else if (name && name.trim()) {
+      // Кастомный под-проект (услуга/товар без карточки WB) — просто именованная сущность
+      card = { type: 'custom', name: name.trim(), description: '', characteristics: [], images: [], url: null, nmId: null };
+    } else {
+      return res.json({ ok: false, error: 'Нужна ссылка или название' });
+    }
     const entry = { id: 'wb_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7), projectId, addedAt: new Date().toISOString(), ...card };
     const list = wbProductsRead();
     list.unshift(entry);
@@ -1161,11 +1168,14 @@ app.post('/api/era/scrape-list', async (req, res) => {
 });
 
 // POST /api/era/scrape-texts { limit? } — скачать тексты статей (нужен cookie для платных)
+// POST /api/era/scrape-texts { slug } — скачать текст одной конкретной статьи
 app.post('/api/era/scrape-texts', async (req, res) => {
   try {
     const limit = Math.min(Number(req.body?.limit) || 30, 300);
     const list = eraLoadArticles();
-    const todo = list.filter(a => !a.hasText).slice(0, limit);
+    const todo = req.body?.slug
+      ? list.filter(a => a.slug === req.body.slug)
+      : list.filter(a => !a.hasText).slice(0, limit);
     let done = 0, locked = 0;
     for (const a of todo) {
       eraLog(`📄 «${a.title.slice(0, 60)}» (${a.date}) — скачиваю статью...`);
@@ -1241,7 +1251,7 @@ app.post('/api/era/chat', async (req, res) => {
 
     const docs = eraSearchDocs(question, 10);
     if (!docs.length) {
-      return res.json({ ok: true, answer: 'В базе пока нет материалов по этому вопросу. Скачайте тексты статей (вкладка «Статьи») или транскрибируйте видео (вкладка «Видео») — и я смогу ответить.', sources: [] });
+      return res.json({ ok: true, answer: 'В базе пока нет материалов по этому вопросу. Скачайте тексты статей или транскрибируйте видео (вкладка «Статьи») — и я смогу ответить.', sources: [] });
     }
 
     const context = docs.map((d, i) =>

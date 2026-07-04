@@ -982,6 +982,12 @@
                       <button class="vgen-model-tab" data-model="veo" onclick="vgenSelectModel('veo',this)">🎬 Veo</button>
                       <button class="vgen-model-tab" data-model="omni" onclick="vgenSelectModel('omni',this)">🌀 Omni</button>
                     </div>
+                    <!-- Под-проект: товар/услуга (фильтрует историю и автозаполняет форму) -->
+                    <div style="padding-bottom:10px;">
+                      <select id="vgen-card-select" onchange="vcardOnSelect(this.value)" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:5px 8px;font-size:11px;outline:none;">
+                        <option value="">— Без товара/услуги (вся история проекта) —</option>
+                      </select>
+                    </div>
                     <!-- Подмодель (для Seedance) -->
                     <div id="vgen-submodel-row" style="display:flex;gap:6px;padding-bottom:10px;">
                       <label class="vgen-ratio-btn active" data-val="fast"><input type="radio" name="vgen-qual" value="fast" checked style="display:none;">Lite (fast)</label>
@@ -1349,7 +1355,6 @@
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
           <button class="cut-format-pill" onclick="eraTab('chat', this)" id="era-tab-chat">💬 Чат</button>
           <button class="cut-format-pill" onclick="eraTab('articles', this)" id="era-tab-articles">📰 Статьи</button>
-          <button class="cut-format-pill" onclick="eraTab('videos', this)" id="era-tab-videos">▶️ Видео</button>
           <button class="cut-format-pill" onclick="eraTab('forecasts', this)" id="era-tab-forecasts">🔮 База прогнозов</button>
           <button class="cut-format-pill" onclick="eraTab('analytics', this)" id="era-tab-analytics">📊 Аналитика</button>
           <button class="cut-format-pill" onclick="eraTab('access', this)" id="era-tab-access">🔑 Доступ</button>
@@ -1378,6 +1383,8 @@
           <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
             <button class="cut-btn cut-btn-primary" onclick="eraScrapeList()" id="era-scrape-list-btn" style="font-size:12px;">📥 Обновить список статей</button>
             <button class="cut-btn cut-btn-secondary" onclick="eraScrapeTexts()" id="era-scrape-texts-btn" style="font-size:12px;">📄 Скачать тексты (30 за раз)</button>
+            <button class="cut-btn cut-btn-secondary" onclick="eraYtImport()" id="era-yt-import-btn" style="font-size:12px;">▶️ Импортировать видео (10)</button>
+            <button class="cut-btn cut-btn-secondary" onclick="eraYtTranscribeAll()" id="era-yt-transcribe-btn" style="font-size:12px;">🎙 Транскрибировать все видео</button>
             <select id="era-cat-filter" onchange="eraRenderArticles()" style="font-size:12px;background:var(--bg-panel);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:5px 8px;">
               <option value="">Все категории</option>
             </select>
@@ -1385,18 +1392,6 @@
           </div>
           <div id="era-progress-log-articles" style="display:none;background:#0d0f17;border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:12px;max-height:180px;overflow-y:auto;font-family:monospace;font-size:11px;line-height:1.7;color:var(--text-muted);"></div>
           <div id="era-articles-table" style="overflow:auto;max-height:70vh;font-size:13px;"></div>
-        </div>
-      </div>
-
-      <div id="era-panel-videos" class="era-panel" style="display:none;">
-        <div class="card">
-          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
-            <button class="cut-btn cut-btn-primary" onclick="eraYtImport()" id="era-yt-import-btn" style="font-size:12px;">📥 Импортировать последние 10</button>
-            <button class="cut-btn cut-btn-secondary" onclick="eraYtTranscribeAll()" id="era-yt-transcribe-btn" style="font-size:12px;">🎙 Транскрибировать все</button>
-            <span id="era-yt-status" style="font-size:12px;color:var(--text-muted);"></span>
-          </div>
-          <div id="era-progress-log" style="display:none;background:#0d0f17;border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:12px;max-height:180px;overflow-y:auto;font-family:monospace;font-size:11px;line-height:1.7;color:var(--text-muted);"></div>
-          <div id="era-yt-table" style="overflow:auto;max-height:70vh;font-size:13px;"></div>
         </div>
       </div>
 
@@ -1582,6 +1577,8 @@ function vprojSelect(id) {
   const projs = vprojLoad();
   const proj = projs.find(p => p.id === id);
   if (lbl && proj) lbl.textContent = 'Проект: ' + proj.name;
+  // обновить товары/услуги (под-проекты) и отфильтровать историю под новый проект
+  wbLoad();
 }
 
 function vprojDelete(id, e) {
@@ -2073,21 +2070,20 @@ const vgenState = { firstImageUrl: null, lastImageUrl: null, pollTimer: null, la
 
 // ═══ Video Generation History ═══
 const VGEN_HIST_KEY = 'vgen_history';
-const VGEN_HIST_MAX = 50;
+const VGEN_HIST_MAX = 300;
 
 function vgenHistoryLoad() {
   try { return JSON.parse(localStorage.getItem(VGEN_HIST_KEY) || '[]'); } catch { return []; }
 }
 function vgenHistorySave(entry) {
   const list = vgenHistoryLoad();
-  list.unshift(entry);
+  list.unshift({ id: 'h_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7), ...entry });
   if (list.length > VGEN_HIST_MAX) list.length = VGEN_HIST_MAX;
   localStorage.setItem(VGEN_HIST_KEY, JSON.stringify(list));
   vgenHistoryRender();
 }
-function vgenHistoryDelete(idx) {
-  const list = vgenHistoryLoad();
-  list.splice(idx, 1);
+function vgenHistoryDelete(id) {
+  const list = vgenHistoryLoad().filter(item => item.id !== id);
   localStorage.setItem(VGEN_HIST_KEY, JSON.stringify(list));
   vgenHistoryRender();
 }
@@ -2095,20 +2091,34 @@ function vgenHistoryDelete(idx) {
 function vgenHistoryRender() {
   const strip = document.getElementById('vgen-history-strip');
   if (!strip) return;
-  const list = vgenHistoryLoad();
+  let list = vgenHistoryLoad();
+  // Разовая миграция: старые записи без projectId (до появления фильтра по проекту)
+  // привязываем к текущему активному проекту, чтобы не потерять их из виду.
+  let migrated = false;
+  if (vActiveProject) {
+    list.forEach(item => { if (!item.projectId) { item.projectId = vActiveProject; migrated = true; } });
+    if (migrated) localStorage.setItem(VGEN_HIST_KEY, JSON.stringify(list));
+  }
+  // Фильтр: только видео этого проекта, и если выбран под-проект (товар/услуга) — только его
+  list = list.filter(item => item.projectId === vActiveProject);
+  if (vActiveCardId) list = list.filter(item => item.cardId === vActiveCardId);
   if (!list.length) { strip.innerHTML = ''; return; }
-  strip.innerHTML = list.map((item, i) => `
-    <div class="vgen-hist-item" onclick="vgenHistoryRestore(${i})" title="${(item.prompt||'').replace(/"/g,'&quot;').slice(0,120)}">
+  strip.innerHTML = list.map((item) => `
+    <div class="vgen-hist-item" onclick="vgenHistoryRestore('${item.id}')" title="${(item.prompt||'').replace(/"/g,'&quot;').slice(0,120)}">
       <video src="${item.url}" muted preload="metadata" loop
         onmouseenter="this.play()" onmouseleave="this.pause();this.currentTime=0"></video>
       <div class="vgen-hist-badge">${item.model||''}${item.duration ? ' · '+item.duration+'s' : ''}</div>
-      <button class="vgen-hist-del" onclick="event.stopPropagation();vgenHistoryDelete(${i})" title="Удалить">✕</button>
+      <button class="vgen-hist-del" onclick="event.stopPropagation();vgenHistoryDelete('${item.id}')" title="Удалить">✕</button>
     </div>`).join('');
 }
 
-function vgenHistoryRestore(idx) {
-  const item = vgenHistoryLoad()[idx];
+function vgenHistoryRestore(id) {
+  const item = vgenHistoryLoad().find(item => item.id === id);
   if (!item) return;
+
+  // Показать само видео в Output — ради этого чаще всего и кликают по истории
+  vgenClearOutput();
+  vgenRenderResultCard(item.url, item.credits, item.costTime);
 
   // Restore model tab
   if (item.model) {
@@ -2458,11 +2468,16 @@ async function vrefKieProcess(imgId, type) {
   }
 }
 
-// ── Товары проекта (импорт карточки с Wildberries) ──
+// ── Товары/услуги проекта (под-проекты) — импорт карточки с Wildberries или своя услуга ──
 let wbProducts = [];
+let vActiveCardId = null;
 
 function wbEsc(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function vcardStorageKey() {
+  return 'vgen_active_card_' + (vActiveProject || 'none');
 }
 
 async function wbOpen() {
@@ -2479,8 +2494,9 @@ async function wbLoad() {
   const empty = document.getElementById('wb-empty');
   if (!vActiveProject) {
     wbProducts = [];
-    if (empty) { empty.style.display = 'block'; empty.querySelector('.wb-empty-text')?.remove(); empty.innerHTML = '<div style="font-size:32px;margin-bottom:8px;opacity:0.3;">🛒</div>Сначала выберите или создайте проект слева'; }
+    if (empty) { empty.style.display = 'block'; empty.innerHTML = '<div style="font-size:32px;margin-bottom:8px;opacity:0.3;">🛒</div>Сначала выберите или создайте проект слева'; }
     wbRender();
+    vcardPopulateSelect();
     return;
   }
   try {
@@ -2489,6 +2505,7 @@ async function wbLoad() {
     wbProducts = d.ok ? d.products : [];
   } catch { wbProducts = []; }
   wbRender();
+  vcardPopulateSelect();
 }
 
 function wbRender() {
@@ -2503,11 +2520,14 @@ function wbRender() {
     div.style.cssText = 'border:1px solid var(--border);border-radius:8px;overflow:hidden;cursor:pointer;transition:border-color 0.15s;position:relative;background:var(--bg);';
     div.addEventListener('mouseover', () => div.style.borderColor = 'var(--accent)');
     div.addEventListener('mouseout', () => div.style.borderColor = 'var(--border)');
+    const thumb = p.images?.[0]
+      ? `<img src="${p.images[0]}" style="width:100%;height:110px;object-fit:cover;display:block;background:#1a1c2a;" loading="lazy">`
+      : `<div style="width:100%;height:110px;display:flex;align-items:center;justify-content:center;font-size:28px;background:#1a1c2a;">🔧</div>`;
     div.innerHTML = `
-      <img src="${p.images?.[0] || ''}" style="width:100%;height:110px;object-fit:cover;display:block;background:#1a1c2a;" loading="lazy">
+      ${thumb}
       <div style="padding:8px;">
         <div style="font-size:11px;font-weight:600;color:var(--text);line-height:1.3;max-height:2.6em;overflow:hidden;">${wbEsc(p.name || 'Без названия')}</div>
-        <div style="font-size:10px;color:var(--text-muted);margin-top:3px;">арт. ${p.nmId}</div>
+        <div style="font-size:10px;color:var(--text-muted);margin-top:3px;">${p.nmId ? 'арт. ' + p.nmId : 'своя услуга'}</div>
       </div>
       <button class="wb-del-btn" style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,0.6);border:none;color:#fff;border-radius:5px;width:20px;height:20px;font-size:12px;cursor:pointer;line-height:1;">✕</button>`;
     div.querySelector('.wb-del-btn').addEventListener('click', (e) => { e.stopPropagation(); wbDelete(p.id); });
@@ -2541,11 +2561,68 @@ async function wbAddByLink() {
   }
 }
 
-function wbDelete(id) {
-  fetch('/api/wb/products/' + id, { method: 'DELETE' }).then(() => wbLoad());
+async function wbAddCustom() {
+  if (!vActiveProject) { alert('Сначала выберите проект слева'); return; }
+  const name = prompt('Название товара или услуги (под-проект):');
+  if (!name || !name.trim()) return;
+  try {
+    const r = await fetch('/api/wb/products', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projectId: vActiveProject, name: name.trim() })
+    });
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error);
+    await wbLoad();
+  } catch (e) { alert('Ошибка: ' + e.message); }
 }
 
+function wbDelete(id) {
+  fetch('/api/wb/products/' + id, { method: 'DELETE' }).then(() => {
+    if (vActiveCardId === id) { vActiveCardId = null; localStorage.removeItem(vcardStorageKey()); }
+    wbLoad();
+  });
+}
+
+// Клик по карточке в модалке — то же самое, что выбрать её в селекте под-проекта
 function wbApply(p) {
+  const sel = document.getElementById('vgen-card-select');
+  if (sel) sel.value = p.id;
+  vcardActivate(p);
+  wbClose();
+}
+
+// ── Селект под-проекта (товар/услуга) — заполняет форму и фильтрует историю ──
+function vcardPopulateSelect() {
+  const sel = document.getElementById('vgen-card-select');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">— Без товара/услуги (вся история проекта) —</option>' +
+    wbProducts.map(p => `<option value="${p.id}">${wbEsc((p.type === 'custom' ? '🔧 ' : '🛒 ') + p.name)}</option>`).join('');
+  const saved = localStorage.getItem(vcardStorageKey());
+  if (saved && wbProducts.some(p => p.id === saved)) {
+    sel.value = saved;
+    vActiveCardId = saved;
+  } else {
+    vActiveCardId = null;
+    sel.value = '';
+    localStorage.removeItem(vcardStorageKey());
+  }
+  vgenHistoryRender();
+}
+
+function vcardOnSelect(id) {
+  if (!id) {
+    vActiveCardId = null;
+    localStorage.removeItem(vcardStorageKey());
+    vgenHistoryRender();
+    return;
+  }
+  const card = wbProducts.find(p => p.id === id);
+  if (card) vcardActivate(card);
+}
+
+function vcardActivate(p) {
+  vActiveCardId = p.id;
+  localStorage.setItem(vcardStorageKey(), p.id);
   if (p.images?.[0]) vgenSetImage('first', p.images[0]);
   // Остальные фото товара кладём в библиотеку проекта — можно быстро выбрать как last_frame
   if (p.images?.length > 1) {
@@ -2557,7 +2634,7 @@ function wbApply(p) {
     vrefSaveImages(lib);
   }
   const promptEl = document.getElementById('vgen-prompt');
-  if (promptEl) {
+  if (promptEl && (p.description || p.characteristics?.length)) {
     const chars = (p.characteristics || []).map(c => `${c.name}: ${c.value}`).join('; ');
     const desc = (p.description || '').slice(0, 500);
     const tag = `\n\n[PRODUCT REFERENCE: ${p.name}. ${desc}${chars ? ' Характеристики: ' + chars : ''}]`;
@@ -2566,7 +2643,7 @@ function wbApply(p) {
     promptEl.style.borderColor = 'var(--accent)';
     setTimeout(() => promptEl.style.borderColor = 'var(--border)', 2000);
   }
-  wbClose();
+  vgenHistoryRender();
 }
 
 // ── Аутро (лого + призыв подписаться/перейти на маркетплейс) — сохраняется один раз, переиспользуется как last_frame ──
@@ -2635,10 +2712,12 @@ function vgenAnimateProgress(pct) {
 }
 
 function vgenShowResult(url, credits, costTime) {
-  // Save to history
+  // Save to history — привязываем к текущему проекту и (если выбран) под-проекту товара/услуги
   if (url && vgenState.lastParams) {
     vgenHistorySave({
       ...vgenState.lastParams,
+      projectId: vActiveProject,
+      cardId: vActiveCardId || null,
       url,
       credits: credits || null,
       costTime: costTime || null,
@@ -2647,6 +2726,10 @@ function vgenShowResult(url, credits, costTime) {
   }
   const card = document.getElementById('vgen-progress-card');
   if (card) card.remove();
+  vgenRenderResultCard(url, credits, costTime);
+}
+
+function vgenRenderResultCard(url, credits, costTime) {
   const ph = document.getElementById('vgen-output-placeholder');
   if (ph) ph.style.display = 'none';
   const ot = document.getElementById('vgen-output-type');
@@ -3606,7 +3689,6 @@ function eraTab(name, btn) {
   document.querySelectorAll('[id^="era-tab-"]').forEach(b => b.classList.remove('active'));
   document.getElementById('era-panel-' + name).style.display = 'block';
   if (btn) btn.classList.add('active');
-  if (name === 'videos' && eraLoaded) eraYtRender();
 }
 
 async function eraLoadArticles() {
@@ -3639,15 +3721,45 @@ function eraRenderArticles() {
     el.innerHTML = '<p style="color:var(--text-muted);">Список пуст. Нажмите «Обновить список статей».</p>';
     return;
   }
+  const fd = s => { s = Math.round(s || 0); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
   el.innerHTML = '<table style="width:100%;border-collapse:collapse;">'
-    + '<tr style="color:var(--text-muted);text-align:left;font-size:11px;"><th style="padding:6px;">Дата</th><th style="padding:6px;">Заголовок</th><th style="padding:6px;">Категория</th><th style="padding:6px;">Текст</th></tr>'
+    + '<tr style="color:var(--text-muted);text-align:left;font-size:11px;"><th style="padding:6px;">Дата</th><th style="padding:6px;">Заголовок</th><th style="padding:6px;">Категория</th><th style="padding:6px;">Текст</th><th style="padding:6px;">Скачать</th></tr>'
     + list.map(a => '<tr style="border-top:1px solid var(--border);">'
       + '<td style="padding:6px;white-space:nowrap;color:var(--text-muted);">' + (a.date || '—') + '</td>'
-      + '<td style="padding:6px;"><a href="' + a.url + '" target="_blank" style="color:var(--text);text-decoration:none;">' + a.title + '</a></td>'
+      + '<td style="padding:6px;">' + (a.source === 'youtube' ? '▶️ ' : '') + '<a href="' + a.url + '" target="_blank" style="color:var(--text);text-decoration:none;">' + a.title + '</a>'
+        + (a.source === 'youtube' && a.duration ? ' <span style="color:var(--text-muted);font-size:11px;">(' + fd(a.duration) + ')</span>' : '') + '</td>'
       + '<td style="padding:6px;font-size:11px;color:var(--text-muted);">' + (a.categoryName || a.category) + '</td>'
       + '<td style="padding:6px;">' + (a.hasText ? '✅' : (a.locked ? '🔒' : '—')) + '</td>'
+      + '<td style="padding:6px;" id="era-dl-' + a.slug + '">' + eraDownloadCellHtml(a) + '</td>'
       + '</tr>').join('')
     + '</table>';
+}
+
+function eraDownloadCellHtml(a) {
+  if (a.hasText) return '';
+  return '<button class="cut-btn cut-btn-secondary" style="padding:2px 8px;font-size:11px;" onclick="eraDownloadOne(\'' + a.slug + '\',\'' + a.source + '\',\'' + (a.videoId || '') + '\')">⬇</button>';
+}
+
+async function eraDownloadOne(slug, source, videoId) {
+  const cell = document.getElementById('era-dl-' + slug);
+  if (cell) cell.textContent = '⏳';
+  try {
+    if (source === 'youtube') {
+      const openaiKey = localStorage.getItem('openai_api_key') || '';
+      if (!openaiKey) { alert('Нужен OpenAI API ключ — добавьте его в ⚙️ Настройках API'); eraRenderArticles(); return; }
+      const r = await fetch('/api/era/yt-transcribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ videoId, openaiKey }) });
+      const d = await r.json();
+      if (!d.ok) throw new Error(d.error);
+    } else {
+      const r = await fetch('/api/era/scrape-texts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ slug }) });
+      const d = await r.json();
+      if (!d.ok) throw new Error(d.error);
+    }
+    await eraLoadArticles();
+  } catch (e) {
+    alert('✗ ' + e.message);
+    eraRenderArticles();
+  }
 }
 
 async function eraScrapeList() {
@@ -3694,33 +3806,16 @@ async function eraSaveCookie() {
   } catch (e) { st.textContent = '✗ ' + e.message; }
 }
 
-function eraYtRender() {
-  const vids = eraArticles.filter(a => a.source === 'youtube');
-  const el = document.getElementById('era-yt-table');
-  if (!vids.length) { el.innerHTML = '<p style="color:var(--text-muted);">Нет видео. Нажмите «Импортировать».</p>'; return; }
-  const fd = s => { s = Math.round(s || 0); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
-  el.innerHTML = '<table style="width:100%;border-collapse:collapse;">'
-    + '<tr style="color:var(--text-muted);text-align:left;font-size:11px;"><th style="padding:6px;">Дата</th><th style="padding:6px;">Название</th><th style="padding:6px;">Длит.</th><th style="padding:6px;">Транскрипт</th></tr>'
-    + vids.map(v => '<tr style="border-top:1px solid var(--border);">'
-      + '<td style="padding:6px;white-space:nowrap;color:var(--text-muted);">' + (v.date || '—') + '</td>'
-      + '<td style="padding:6px;"><a href="' + v.url + '" target="_blank" style="color:var(--text);text-decoration:none;">' + v.title + '</a></td>'
-      + '<td style="padding:6px;color:var(--text-muted);">' + (v.duration ? fd(v.duration) : '—') + '</td>'
-      + '<td style="padding:6px;">' + (v.hasText ? '✅ ' + Math.round((v.textLen || 0) / 1000) + 'к' : '—') + '</td>'
-      + '</tr>').join('')
-    + '</table>';
-}
-
 async function eraYtImport() {
   const btn = document.getElementById('era-yt-import-btn');
-  const st = document.getElementById('era-yt-status');
+  const st = document.getElementById('era-articles-status');
   btn.disabled = true; st.textContent = '⏳ Получаю список видео...';
   try {
     const r = await fetch('/api/era/yt-list', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ count: 10 }) });
     const d = await r.json();
     if (!d.ok) throw new Error(d.error);
-    st.textContent = '✓ Добавлено: ' + d.added + ', всего видео: ' + d.total;
+    st.textContent = '✓ Добавлено видео: ' + d.added + ', всего видео: ' + d.total;
     await eraLoadArticles();
-    eraYtRender();
   } catch (e) { st.textContent = '✗ ' + e.message; }
   finally { btn.disabled = false; }
 }
@@ -3729,18 +3824,17 @@ async function eraYtTranscribeAll() {
   const openaiKey = localStorage.getItem('openai_api_key') || '';
   if (!openaiKey) return alert('Нужен OpenAI API ключ — добавьте его в ⚙️ Настройках API');
   const btn = document.getElementById('era-yt-transcribe-btn');
-  const st = document.getElementById('era-yt-status');
+  const st = document.getElementById('era-articles-status');
   btn.disabled = true;
   try {
     for (let i = 0; i < 50; i++) {
-      st.textContent = '⏳ Скачиваю и транскрибирую... (может занять несколько минут на видео)';
+      st.textContent = '⏳ Скачиваю и транскрибирую видео... (может занять несколько минут на видео)';
       const r = await fetch('/api/era/yt-transcribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ openaiKey }) });
       const d = await r.json();
       if (!d.ok) throw new Error(d.error);
       if (d.done) { st.textContent = '✅ Все видео транскрибированы'; break; }
-      st.textContent = '✓ ' + (d.title || d.transcribed) + ' · осталось: ' + d.remaining;
+      st.textContent = '✓ ' + (d.title || d.transcribed) + ' · осталось видео: ' + d.remaining;
       await eraLoadArticles();
-      eraYtRender();
       if (!d.remaining) { st.textContent = '✅ Готово — все видео транскрибированы'; break; }
     }
   } catch (e) { st.textContent = '✗ ' + e.message; }
@@ -3932,6 +4026,7 @@ document.addEventListener('DOMContentLoaded', () => {
     <div style="padding:12px 20px;border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:center;">
       <input id="wb-link-input" placeholder="Ссылка на товар wildberries.ru/catalog/.../detail.aspx или артикул" style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:7px;color:var(--text);padding:8px 12px;font-size:12px;outline:none;" onkeydown="if(event.key==='Enter')wbAddByLink()">
       <button id="wb-add-btn" onclick="wbAddByLink()" style="background:var(--accent);color:#fff;border:none;border-radius:7px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;">+ Добавить</button>
+      <button onclick="wbAddCustom()" style="background:var(--card-bg);border:1px solid var(--border);color:var(--text);border-radius:7px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;" title="Под-проект без ссылки WB — для услуги или товара без карточки">+ Своя услуга</button>
     </div>
     <div id="wb-add-status" style="padding:6px 20px 0;font-size:12px;color:#ef4444;"></div>
     <!-- Grid -->
