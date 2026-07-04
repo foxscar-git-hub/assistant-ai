@@ -358,8 +358,10 @@ function wbExtractNmId(input) {
 async function wbResolveBasket(nmId) {
   const vol = Math.floor(nmId / 100000);
   const part = Math.floor(nmId / 1000);
+  // WB постоянно добавляет новые basket-хосты по мере роста (на момент проверки дошло
+  // до basket-46) — берём запас, чтобы диапазон не протухал за пару недель.
   const results = await Promise.allSettled(
-    Array.from({ length: 30 }, (_, i) => {
+    Array.from({ length: 60 }, (_, i) => {
       const base = `https://basket-${String(i + 1).padStart(2, '0')}.wbbasket.ru/vol${vol}/part${part}/${nmId}`;
       return fetch(base + '/info/ru/card.json', { method: 'HEAD' }).then(r => (r.ok ? base : Promise.reject()));
     })
@@ -372,7 +374,14 @@ async function wbFetchCard(url) {
   const nmId = wbExtractNmId(url);
   if (!nmId) throw new Error('Не удалось распознать артикул в ссылке');
   const base = await wbResolveBasket(nmId);
-  const cardRes = await fetch(base + '/info/ru/card.json');
+  // Один повтор на случай кратковременного сетевого сбоя сразу после 60 параллельных
+  // проверок хостов в wbResolveBasket()
+  let cardRes;
+  try {
+    cardRes = await fetch(base + '/info/ru/card.json');
+  } catch {
+    cardRes = await fetch(base + '/info/ru/card.json');
+  }
   if (!cardRes.ok) throw new Error('Карточка товара не найдена (HTTP ' + cardRes.status + ')');
   const card = await cardRes.json();
   const photoCount = card?.media?.photo_count || 0;
