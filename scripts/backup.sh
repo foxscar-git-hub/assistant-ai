@@ -1,10 +1,10 @@
 #!/bin/bash
 # Автоматический коммит и push изменений проекта
 # Запуск: ./scripts/backup.sh [сообщение]
-# Cron пример (каждый час): 0 * * * * /Volumes/data/ассистент-new/scripts/backup.sh
+# Cron пример (каждый час): 0 * * * * /Volumes/data/ассистент/scripts/backup.sh
 
 set -e
-cd /Volumes/data/ассистент-new
+cd /Volumes/data/ассистент
 
 MSG="${1:-auto: backup $(date '+%Y-%m-%d %H:%M')}"
 

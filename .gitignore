@@ -7,3 +7,5 @@ data/*.db
 data/*.db-shm
 data/*.db-wal
 data/cut-uploads/
+data/era/
+bin/

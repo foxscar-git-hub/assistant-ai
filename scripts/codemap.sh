@@ -2,7 +2,7 @@
 # Генерирует CODE_INDEX.md — карту всех ключевых блоков кода для быстрого поиска
 
 set -e
-cd /Volumes/data/ассистент-new
+cd /Volumes/data/ассистент
 OUT="CODE_INDEX.md"
 
 echo "# Code Index — AI Ассистент" > "$OUT"

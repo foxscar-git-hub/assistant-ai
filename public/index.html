@@ -860,6 +860,9 @@
         <a class="nav-item" onclick="openPage('wip-cut')" data-page="wip-cut">
           <span class="nav-item-icon">✂️</span> Видео нарезка
         </a>
+        <a class="nav-item" onclick="openPage('wip-era'); eraInit();" data-page="wip-era">
+          <span class="nav-item-icon">🔮</span> Эра перемен
+        </a>
       </div>
     </div>
 
@@ -978,8 +981,11 @@
                     <!-- Подмодель (для Seedance) -->
                     <div id="vgen-submodel-row" style="display:flex;gap:6px;padding-bottom:10px;">
                       <label class="vgen-ratio-btn active" data-val="fast"><input type="radio" name="vgen-qual" value="fast" checked style="display:none;">Lite (fast)</label>
+                      <label class="vgen-ratio-btn" data-val="mini"><input type="radio" name="vgen-qual" value="mini" style="display:none;">Mini</label>
                       <label class="vgen-ratio-btn" data-val="pro"><input type="radio" name="vgen-qual" value="pro" style="display:none;">Pro</label>
                     </div>
+                    <!-- Режим генерации (для Omni: текст → видео / референсы → видео) -->
+                    <div id="vgen-mode-row" style="display:none;gap:6px;padding-bottom:10px;"></div>
                   </div>
 
                   <div style="flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:14px;">
@@ -1012,9 +1018,9 @@
                     </div>
 
                     <!-- First frame image -->
-                    <div>
+                    <div id="vgen-first-section">
                       <label style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-                        <span>first_frame_image</span>
+                        <span id="vgen-first-label">first_frame_image</span>
                         <div style="display:flex;gap:6px;align-items:center;">
                           <button onclick="vrefPickOpen('first')" style="background:none;border:1px solid var(--border);border-radius:5px;color:var(--text-muted);font-size:11px;cursor:pointer;padding:2px 8px;" title="Выбрать из библиотеки">📁 Библ.</button>
                           <button id="vgen-analyze-btn" onclick="vgenAnalyzeImage()" style="background:none;border:1px solid rgba(108,99,255,0.4);border-radius:5px;color:var(--accent);font-size:11px;cursor:pointer;padding:2px 8px;display:none;" title="Анализ фото через GPT-4o — добавит описание товара в промт">🔍 Анализ</button>
@@ -1034,9 +1040,9 @@
                     </div>
 
                     <!-- Last frame image -->
-                    <div>
+                    <div id="vgen-last-section">
                       <label style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-                        <span>last_frame_image</span>
+                        <span id="vgen-last-label">last_frame_image</span>
                         <div style="display:flex;gap:6px;align-items:center;">
                           <button onclick="vrefPickOpen('last')" style="background:none;border:1px solid var(--border);border-radius:5px;color:var(--text-muted);font-size:11px;cursor:pointer;padding:2px 8px;">📁 Библ.</button>
                           <button onclick="vgenClearImage('last')" style="background:none;border:none;color:#ef4444;font-size:11px;cursor:pointer;display:none;" id="vgen-clear-last">✕</button>
@@ -1222,10 +1228,12 @@
           </div>
           <div>
             <span class="cut-label">Формат нарезки</span>
-            <div style="display:flex;gap:8px;">
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
               <button class="cut-format-pill active" id="cut-fmt-vertical" onclick="cutSetFormat('vertical')">📱 Верт. 9:16</button>
               <button class="cut-format-pill" id="cut-fmt-horizontal" onclick="cutSetFormat('horizontal')">🎬 Гор. 16:9</button>
+              <button class="cut-format-pill" id="cut-fmt-smart" onclick="cutSmartFormat()">🪄 Умный</button>
             </div>
+            <div id="cut-smart-panel" style="display:none;margin-top:8px;"></div>
           </div>
           <div>
             <span class="cut-label">Количество клипов: <span id="cut-count-val">5</span></span>
@@ -1327,6 +1335,89 @@
       </div><!-- /cut-work-col -->
     </div><!-- /page-wip-cut -->
 
+    <!-- ЭРА ПЕРЕМЕН page -->
+    <div class="page" id="page-wip-era">
+      <div class="card" style="margin-bottom:14px;">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+          <button class="cut-format-pill" onclick="eraTab('chat', this)" id="era-tab-chat">💬 Чат</button>
+          <button class="cut-format-pill" onclick="eraTab('articles', this)" id="era-tab-articles">📰 Статьи</button>
+          <button class="cut-format-pill" onclick="eraTab('videos', this)" id="era-tab-videos">▶️ Видео</button>
+          <button class="cut-format-pill" onclick="eraTab('forecasts', this)" id="era-tab-forecasts">🔮 База прогнозов</button>
+          <button class="cut-format-pill" onclick="eraTab('analytics', this)" id="era-tab-analytics">📊 Аналитика</button>
+          <button class="cut-format-pill" onclick="eraTab('access', this)" id="era-tab-access">🔑 Доступ</button>
+          <span id="era-stats" style="margin-left:auto;font-size:12px;color:var(--text-muted);"></span>
+        </div>
+      </div>
+
+      <div id="era-panel-chat" class="era-panel" style="display:none;">
+        <div class="card" style="display:flex;flex-direction:column;height:72vh;">
+          <div id="era-chat-messages" style="flex:1;overflow-y:auto;padding:4px 2px;display:flex;flex-direction:column;gap:10px;">
+            <div style="color:var(--text-muted);font-size:13px;text-align:center;margin-top:30px;">
+              🔮 Задайте вопрос — отвечу на основе базы статей и транскриптов «Эры Перемен»,<br>в стиле автора, со ссылками на источники.
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:10px;">
+            <textarea id="era-chat-input" placeholder="Например: что будет с рублём до конца года?" rows="2"
+              style="flex:1;background:var(--bg-panel);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:10px;font-size:13px;resize:none;"
+              onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();eraChatSend();}"></textarea>
+            <button class="cut-btn cut-btn-primary" onclick="eraChatSend()" id="era-chat-send" style="align-self:flex-end;">Отправить</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="era-panel-articles" class="era-panel">
+        <div class="card">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
+            <button class="cut-btn cut-btn-primary" onclick="eraScrapeList()" id="era-scrape-list-btn" style="font-size:12px;">📥 Обновить список статей</button>
+            <button class="cut-btn cut-btn-secondary" onclick="eraScrapeTexts()" id="era-scrape-texts-btn" style="font-size:12px;">📄 Скачать тексты (30 за раз)</button>
+            <select id="era-cat-filter" onchange="eraRenderArticles()" style="font-size:12px;background:var(--bg-panel);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:5px 8px;">
+              <option value="">Все категории</option>
+            </select>
+            <span id="era-articles-status" style="font-size:12px;color:var(--text-muted);"></span>
+          </div>
+          <div id="era-progress-log-articles" style="display:none;background:#0d0f17;border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:12px;max-height:180px;overflow-y:auto;font-family:monospace;font-size:11px;line-height:1.7;color:var(--text-muted);"></div>
+          <div id="era-articles-table" style="overflow:auto;max-height:70vh;font-size:13px;"></div>
+        </div>
+      </div>
+
+      <div id="era-panel-videos" class="era-panel" style="display:none;">
+        <div class="card">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
+            <button class="cut-btn cut-btn-primary" onclick="eraYtImport()" id="era-yt-import-btn" style="font-size:12px;">📥 Импортировать последние 10</button>
+            <button class="cut-btn cut-btn-secondary" onclick="eraYtTranscribeAll()" id="era-yt-transcribe-btn" style="font-size:12px;">🎙 Транскрибировать все</button>
+            <span id="era-yt-status" style="font-size:12px;color:var(--text-muted);"></span>
+          </div>
+          <div id="era-progress-log" style="display:none;background:#0d0f17;border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:12px;max-height:180px;overflow-y:auto;font-family:monospace;font-size:11px;line-height:1.7;color:var(--text-muted);"></div>
+          <div id="era-yt-table" style="overflow:auto;max-height:70vh;font-size:13px;"></div>
+        </div>
+      </div>
+
+      <div id="era-panel-forecasts" class="era-panel" style="display:none;">
+        <div class="card"><h3>🔮 База прогнозов</h3><p style="color:var(--text-muted);font-size:13px;">Систематизация прогнозов из статей через Claude — станет доступна после скачивания текстов.</p></div>
+      </div>
+
+      <div id="era-panel-analytics" class="era-panel" style="display:none;">
+        <div class="card"><h3>📊 Аналитика</h3><p style="color:var(--text-muted);font-size:13px;">Статистика по темам и таймлайн прогнозов — после наполнения базы.</p></div>
+      </div>
+
+      <div id="era-panel-access" class="era-panel" style="display:none;">
+        <div class="card">
+          <h3>🔑 Доступ к платным разделам</h3>
+          <p style="font-size:13px;color:var(--text-muted);">На сайте стоит reCAPTCHA, поэтому вход по логину/паролю с сервера невозможен. Нужен cookie вашей сессии из браузера:</p>
+          <ol style="font-size:12px;color:var(--text-muted);line-height:1.7;">
+            <li>Откройте eraperemen.info (вы должны быть залогинены)</li>
+            <li>DevTools (F12) → вкладка Network → обновите страницу → кликните первый запрос</li>
+            <li>В Request Headers найдите строку <code>Cookie:</code> и скопируйте её значение целиком</li>
+          </ol>
+          <textarea id="era-cookie-input" placeholder="wordpress_logged_in_...=...; ..." style="width:100%;height:70px;background:var(--bg-panel);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:8px;font-size:11px;font-family:monospace;"></textarea>
+          <div style="margin-top:8px;display:flex;gap:8px;align-items:center;">
+            <button class="cut-btn cut-btn-primary" onclick="eraSaveCookie()" style="font-size:12px;">💾 Сохранить и проверить</button>
+            <span id="era-cookie-status" style="font-size:12px;color:var(--text-muted);"></span>
+          </div>
+        </div>
+      </div>
+    </div><!-- /page-wip-era -->
+
   </div><!-- /content -->
 </div><!-- /main -->
 
@@ -1339,6 +1430,7 @@ const pageMeta = {
   'wip-api':      { title: 'Настройки API',      badge: 'badge-wip',  label: 'В работе'  },
   'wip-video':    { title: 'Видео',              badge: 'badge-wip',  label: 'В работе'  },
   'wip-cut':      { title: 'Видео нарезка',      badge: 'badge-wip',  label: 'В работе'  },
+  'wip-era':      { title: 'Эра перемен',        badge: 'badge-wip',  label: 'В работе'  },
   'todo-seo':     { title: 'SEO-инструменты',   badge: 'badge-todo', label: 'Не готово' },
   'todo-reports': { title: 'Отчёты',             badge: 'badge-todo', label: 'Не готово' },
   'todo-auth':    { title: 'Авторизация',        badge: 'badge-todo', label: 'Не готово' },
@@ -1618,19 +1710,26 @@ function kieLogExpand(btn, taskId) {
 }
 
 // ── Model tabs ──
-// Parameters sourced from fal.ai API docs (Seedance 2.0, Veo 3)
+// Parameters sourced from docs.kie.ai/market (Seedance 2.0 / Mini, Veo 3, Gemini Omni)
 const VGEN_MODELS = {
   seedance: {
     creditHint: '💎 ~80–240 кредитов',
     submodels: [
       { value: 'fast', label: 'Lite (fast)' },
+      { value: 'mini', label: 'Mini' },
       { value: 'pro',  label: 'Pro' },
     ],
+    // fast/mini поддерживают только 480p/720p, pro — до 4K
+    resolutionsBySub: {
+      fast: ['480p', '720p'],
+      mini: ['480p', '720p'],
+      pro:  ['480p', '720p', '1080p', '4k'],
+    },
     durMin: 4, durMax: 15, durStep: 1, defaultDuration: 5,
     aspects: ['16:9', '9:16', '21:9', '4:3', '3:4', '1:1'],
-    resolutions: ['480p', '720p', '1080p', '4k'],
+    resolutions: ['480p', '720p'],
     defaultResolution: '720p',
-    notes: 'Seedance 2.0 · 4–15 сек · до 4K',
+    notes: 'Seedance 2.0 · 4–15 сек · Lite/Mini до 720p, Pro до 4K',
   },
   veo: {
     creditHint: '💎 ~200–500 кредитов',
@@ -1644,19 +1743,25 @@ const VGEN_MODELS = {
   omni: {
     creditHint: '💎 ~100–300 кредитов',
     submodels: [],
-    durMin: 1, durMax: 10, durStep: 1, defaultDuration: 5,
-    aspects: ['16:9', '9:16', '1:1'],
+    modes: [
+      { value: 't2v', label: '📝 Текст → видео' },
+      { value: 'i2v', label: '🖼 Референсы → видео' },
+    ],
+    durMin: 4, durMax: 10, durStep: 2, defaultDuration: 6,
+    aspects: ['16:9', '9:16'],
     resolutions: ['720p', '1080p', '4k'],
     defaultResolution: '720p',
-    notes: 'Gemini Omni · 1–10 сек · до 4K',
+    notes: 'Gemini Omni · 4/6/8/10 сек · до 4K · референсы до 7 картинок',
   },
 };
 let vgenActiveModel = 'seedance';
+let vgenOmniMode = 't2v';
 
 function vgenSelectModel(model, btn) {
   vgenActiveModel = model;
+  if (!btn) btn = document.querySelector(`.vgen-model-tab[data-model="${model}"]`);
   document.querySelectorAll('.vgen-model-tab').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
+  if (btn) btn.classList.add('active');
   const cfg = VGEN_MODELS[model] || VGEN_MODELS.seedance;
 
   // submodel row
@@ -1675,12 +1780,42 @@ function vgenSelectModel(model, btn) {
           subRow.querySelectorAll('.vgen-ratio-btn').forEach(b => b.classList.remove('active'));
           lbl.classList.add('active');
           lbl.querySelector('input').checked = true;
+          // подмодель может менять доступные разрешения (fast/mini vs pro)
+          if (cfg.resolutionsBySub) {
+            const list = cfg.resolutionsBySub[lbl.dataset.val] || cfg.resolutions;
+            vgenRenderResolutions(list, list.includes(cfg.defaultResolution) ? cfg.defaultResolution : list[list.length - 1]);
+          }
         });
       });
     } else {
       subRow.style.display = 'none';
     }
   }
+
+  // mode row (Omni: текст → видео / референсы → видео)
+  const modeRow = document.getElementById('vgen-mode-row');
+  if (modeRow) {
+    if (cfg.modes && cfg.modes.length) {
+      modeRow.style.display = 'flex';
+      modeRow.innerHTML = cfg.modes.map(m =>
+        `<label class="vgen-ratio-btn${m.value === vgenOmniMode ? ' active' : ''}" data-val="${m.value}">
+          <input type="radio" name="vgen-mode" value="${m.value}" ${m.value === vgenOmniMode ? 'checked' : ''} style="display:none;">${m.label}
+        </label>`
+      ).join('');
+      modeRow.querySelectorAll('.vgen-ratio-btn').forEach(lbl => {
+        lbl.addEventListener('click', () => {
+          modeRow.querySelectorAll('.vgen-ratio-btn').forEach(b => b.classList.remove('active'));
+          lbl.classList.add('active');
+          lbl.querySelector('input').checked = true;
+          vgenOmniMode = lbl.dataset.val;
+          vgenUpdateImageSections();
+        });
+      });
+    } else {
+      modeRow.style.display = 'none';
+    }
+  }
+  vgenUpdateImageSections();
 
   // duration slider
   const slider = document.getElementById('vgen-dur-slider');
@@ -1723,22 +1858,9 @@ function vgenSelectModel(model, btn) {
     });
   }
 
-  // resolution buttons
-  const resRow = document.getElementById('vgen-res-row');
-  if (resRow) {
-    resRow.innerHTML = cfg.resolutions.map((r, i) =>
-      `<label class="vgen-ratio-btn${r === cfg.defaultResolution ? ' active' : ''}" data-val="${r}">
-        <input type="radio" name="vgen-res" value="${r}" ${r === cfg.defaultResolution ? 'checked' : ''} style="display:none;">${r}
-      </label>`
-    ).join('');
-    resRow.querySelectorAll('.vgen-ratio-btn').forEach(lbl => {
-      lbl.addEventListener('click', () => {
-        resRow.querySelectorAll('.vgen-ratio-btn').forEach(b => b.classList.remove('active'));
-        lbl.classList.add('active');
-        lbl.querySelector('input').checked = true;
-      });
-    });
-  }
+  // resolution buttons (для seedance зависят от подмодели; по умолчанию первая — fast)
+  const resList = cfg.resolutionsBySub ? (cfg.resolutionsBySub[cfg.submodels[0]?.value] || cfg.resolutions) : cfg.resolutions;
+  vgenRenderResolutions(resList, resList.includes(cfg.defaultResolution) ? cfg.defaultResolution : resList[resList.length - 1]);
 
   // notes
   const notes = document.getElementById('vgen-model-notes');
@@ -1747,6 +1869,46 @@ function vgenSelectModel(model, btn) {
   // credit hint
   const hint = document.getElementById('vgen-credit-hint');
   if (hint) hint.textContent = cfg.creditHint;
+}
+
+function vgenRenderResolutions(list, defaultRes) {
+  const resRow = document.getElementById('vgen-res-row');
+  if (!resRow) return;
+  const current = vgenGetParam('vgen-res');
+  const active = list.includes(current) ? current : defaultRes;
+  resRow.innerHTML = list.map(r =>
+    `<label class="vgen-ratio-btn${r === active ? ' active' : ''}" data-val="${r}">
+      <input type="radio" name="vgen-res" value="${r}" ${r === active ? 'checked' : ''} style="display:none;">${r}
+    </label>`
+  ).join('');
+  resRow.querySelectorAll('.vgen-ratio-btn').forEach(lbl => {
+    lbl.addEventListener('click', () => {
+      resRow.querySelectorAll('.vgen-ratio-btn').forEach(b => b.classList.remove('active'));
+      lbl.classList.add('active');
+      lbl.querySelector('input').checked = true;
+    });
+  });
+}
+
+// Показ/подпись секций изображений в зависимости от модели и режима Omni
+function vgenUpdateImageSections() {
+  const firstSec = document.getElementById('vgen-first-section');
+  const lastSec  = document.getElementById('vgen-last-section');
+  const firstLbl = document.getElementById('vgen-first-label');
+  const lastLbl  = document.getElementById('vgen-last-label');
+  if (!firstSec || !lastSec) return;
+  if (vgenActiveModel === 'omni') {
+    const show = vgenOmniMode === 'i2v';
+    firstSec.style.display = show ? '' : 'none';
+    lastSec.style.display  = show ? '' : 'none';
+    if (firstLbl) firstLbl.textContent = 'reference_image_1 (image_urls)';
+    if (lastLbl)  lastLbl.textContent  = 'reference_image_2 (image_urls)';
+  } else {
+    firstSec.style.display = '';
+    lastSec.style.display  = '';
+    if (firstLbl) firstLbl.textContent = 'first_frame_image';
+    if (lastLbl)  lastLbl.textContent  = 'last_frame_image';
+  }
 }
 
 // ── Reference Library ──
@@ -2204,9 +2366,11 @@ async function vgenAnalyzeImage() {
       if (btn) { btn.textContent = '✓ Готово'; setTimeout(() => { btn.textContent = '🔍 Анализ'; btn.disabled = false; }, 2000); }
     } else {
       if (btn) { btn.textContent = '❌ Ошибка'; setTimeout(() => { btn.textContent = '🔍 Анализ'; btn.disabled = false; }, 2000); }
+      alert('Ошибка анализа фото: ' + (d.error || 'неизвестно'));
     }
   } catch (e) {
     if (btn) { btn.textContent = '🔍 Анализ'; btn.disabled = false; }
+    alert('Ошибка анализа фото: ' + e.message);
   }
 }
 
@@ -2257,8 +2421,11 @@ async function vrefKieProcess(imgId, type) {
   }
 }
 
-// Upload image to server (base64 → URL)
+// Upload image to server (base64 → URL). Если это уже http(s)-ссылка
+// (картинка из библиотеки после upscale/multiangle) — отправлять не нужно.
+let vgenLastUploadError = '';
 async function vgenUploadImage(base64) {
+  if (/^https?:\/\//i.test(base64)) return base64;
   try {
     const kieKey = localStorage.getItem('kie_api_key') || '';
     const r = await fetch('/api/kie/upload-image', {
@@ -2267,9 +2434,9 @@ async function vgenUploadImage(base64) {
       body: JSON.stringify({ base64, filename: 'frame.jpg' })
     });
     const d = await r.json();
-    if (!d.ok) console.error('Image upload failed:', d.error);
+    if (!d.ok) { vgenLastUploadError = d.error || 'неизвестная ошибка'; console.error('Image upload failed:', d.error); }
     return d.ok ? d.url : null;
-  } catch (e) { console.error('Image upload error:', e); return null; }
+  } catch (e) { vgenLastUploadError = e.message; console.error('Image upload error:', e); return null; }
 }
 
 function vgenShowProgress(msg) {
@@ -2411,25 +2578,44 @@ async function vgenRun() {
 
   vgenShowProgress('Загрузка изображений...');
 
-  // Upload images if set
+  const model = vgenActiveModel || 'seedance';
+  // Omni в режиме «Текст → видео» игнорирует прикреплённые картинки
+  const skipImages = model === 'omni' && vgenOmniMode !== 'i2v';
+
+  // Upload images if set. Если картинка прикреплена, но загрузить её не удалось —
+  // останавливаемся с ошибкой, а не генерируем молча без референса.
   let firstUrl = null, lastUrl = null;
-  if (vgenState.firstImageUrl) {
+  if (!skipImages && vgenState.firstImageUrl) {
     vgenAnimateProgress(10);
     firstUrl = await vgenUploadImage(vgenState.firstImageUrl);
+    if (!firstUrl) {
+      vgenShowError('Не удалось загрузить первое изображение на KIE (' + (vgenLastUploadError || 'неизвестная ошибка') + ') — генерация остановлена, чтобы видео не создалось без референса.');
+      if (btn) { btn.disabled = false; btn.innerHTML = '▶ Run'; }
+      return;
+    }
   }
-  if (vgenState.lastImageUrl) {
+  if (!skipImages && vgenState.lastImageUrl) {
     vgenAnimateProgress(15);
     lastUrl = await vgenUploadImage(vgenState.lastImageUrl);
+    if (!lastUrl) {
+      vgenShowError('Не удалось загрузить второе изображение на KIE (' + (vgenLastUploadError || 'неизвестная ошибка') + ') — генерация остановлена.');
+      if (btn) { btn.disabled = false; btn.innerHTML = '▶ Run'; }
+      return;
+    }
+  }
+  if (model === 'omni' && vgenOmniMode === 'i2v' && !firstUrl && !lastUrl) {
+    vgenShowError('Режим «Референсы → видео» требует хотя бы одно изображение. Прикрепите картинку или переключитесь на «Текст → видео».');
+    if (btn) { btn.disabled = false; btn.innerHTML = '▶ Run'; }
+    return;
   }
 
   const aspect_ratio = vgenGetParam('vgen-ratio') || '16:9';
   const duration = parseInt(vgenGetParam('vgen-dur') || '5');
-  const quality = vgenGetParam('vgen-qual') === 'pro' ? 'pro' : 'fast';
+  const quality = vgenGetParam('vgen-qual') || 'fast';
   const resolution = vgenGetParam('vgen-res') || '720p';
-  const model = vgenActiveModel || 'seedance';
   const format = document.querySelector('input[name="vgen-format"]:checked')?.value || 'cinematic';
   // Save all params for history
-  vgenState.lastParams = { prompt, model, format, duration, aspect_ratio, resolution, quality };
+  vgenState.lastParams = { prompt, model, format, duration, aspect_ratio, resolution, quality, mode: model === 'omni' ? vgenOmniMode : undefined };
 
   const msg = document.getElementById('vgen-progress-msg');
   if (msg) msg.textContent = 'Создание задачи генерации...';
@@ -2465,6 +2651,8 @@ async function vgenRun() {
 document.addEventListener('DOMContentLoaded', () => {
   vprojRender();
   vgenHistoryRender();
+  // нормализуем панель под конфиг модели (подмодели, режимы, разрешения)
+  vgenSelectModel(vgenActiveModel);
 });
 
 // ═══════ Drag & Drop nav items between blocks ═══════
@@ -2894,6 +3082,52 @@ function cutSetFormat(fmt) {
   cutCurrentFormat = fmt;
   document.getElementById('cut-fmt-vertical').classList.toggle('active', fmt === 'vertical');
   document.getElementById('cut-fmt-horizontal').classList.toggle('active', fmt === 'horizontal');
+  // Re-evaluate smart crop panel for the new target format
+  if (document.getElementById('cut-smart-panel').style.display !== 'none') cutSmartFormat();
+}
+
+let cutCurrentSmartCrop = null; // null = обычный центр-кроп; 0-100 = % обрезки лишнего
+
+async function cutSmartFormat() {
+  if (!cutCurrentId) return alert('Сначала создайте проект');
+  const panel = document.getElementById('cut-smart-panel');
+  document.getElementById('cut-fmt-smart').classList.add('active');
+  panel.style.display = 'block';
+  panel.innerHTML = '<span style="font-size:11px;color:var(--text-muted);">⏳ Определяю формат оригинала...</span>';
+  try {
+    const r = await fetch('/api/cut/projects/' + encodeURIComponent(cutCurrentId) + '/probe');
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error);
+    const srcVertical = d.height > d.width;
+    const tgtVertical = cutCurrentFormat === 'vertical';
+    const srcLabel = srcVertical ? 'вертикальный' : 'горизонтальный';
+    if (srcVertical === tgtVertical) {
+      cutCurrentSmartCrop = null;
+      panel.innerHTML = '<span style="font-size:11px;color:var(--text-muted);">✓ Оригинал ' + d.width + '×' + d.height + ' уже ' + srcLabel + ' — обрезка не нужна</span>';
+      return;
+    }
+    if (cutCurrentSmartCrop === null) cutCurrentSmartCrop = 25;
+    const opts = [
+      { v: 100, label: 'Полный кадр', desc: 'кадр заполнен целиком, лишние края обрезаются (центрирование)' },
+      { v: 50, label: 'Обрезка 50%', desc: 'компромисс: половина лишнего обрезается, небольшие размытые поля' },
+      { v: 25, label: 'Обрезка 25%', desc: 'почти весь кадр сохраняется, умеренные размытые поля' },
+      { v: 0, label: 'Без обрезки', desc: 'весь кадр целиком, ' + (tgtVertical ? 'размытый фон сверху и снизу' : 'размытый фон по бокам') },
+    ];
+    const cur = opts.find(o => o.v === cutCurrentSmartCrop) || opts[2];
+    panel.innerHTML =
+      '<div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;">Оригинал ' + d.width + '×' + d.height + ' (' + srcLabel + ') → ' + (tgtVertical ? '9:16' : '16:9') + '. Сколько обрезать?</div>'
+      + '<div style="display:flex;gap:6px;flex-wrap:wrap;">'
+      + opts.map(o => '<button class="cut-format-pill' + (cutCurrentSmartCrop === o.v ? ' active' : '') + '" style="font-size:11px;padding:5px 10px;" onclick="cutSmartSetCrop(' + o.v + ')">' + o.label + '</button>').join('')
+      + '</div>'
+      + '<div style="font-size:11px;color:var(--text-muted);margin-top:6px;">' + cur.desc + '</div>';
+  } catch (e) {
+    panel.innerHTML = '<span style="font-size:11px;color:#e5484d;">✗ ' + e.message + '</span>';
+  }
+}
+
+function cutSmartSetCrop(v) {
+  cutCurrentSmartCrop = v;
+  cutSmartFormat();
 }
 
 function cutSwitchTab(name, btn) {
@@ -3076,7 +3310,7 @@ async function cutExecute() {
     const r = await fetch('/api/cut/execute', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ projectId: cutCurrentId, cuts: cutCurrentCuts, format: cutCurrentFormat }),
+      body: JSON.stringify({ projectId: cutCurrentId, cuts: cutCurrentCuts, format: cutCurrentFormat, smartCrop: cutCurrentSmartCrop }),
     });
     const d = await r.json();
     if (!d.ok) throw new Error(d.error);
@@ -3118,10 +3352,10 @@ async function cutGalleryLoad() {
         title = savedCuts[m[1] - 1].title;
       }
       const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
-      // Download name: DD_MM_Meaningful_title.mp4 (date = clip creation time)
+      // Download name: MM_DD_clipN.mp4 (date = clip creation time)
       const cd = new Date(c.mtime || Date.now());
-      const dlName = String(cd.getDate()).padStart(2, '0') + '_' + String(cd.getMonth() + 1).padStart(2, '0') + '_'
-        + title.replace(/[\/\\:*?"<>|«»]/g, '').trim().replace(/\s+/g, '_').slice(0, 80) + '.mp4';
+      const dlName = String(cd.getMonth() + 1).padStart(2, '0') + '_' + String(cd.getDate()).padStart(2, '0') + '_'
+        + c.filename.replace(/\.mp4$/, '').replace(/_/g, '') + '.mp4';
       return `
       <div class="cut-clip-card">
         <video src="${c.url}" controls preload="metadata" style="max-height:180px;"></video>
@@ -3148,6 +3382,259 @@ async function cutClipDelete(filename) {
     cutGalleryLoad();
   } catch (e) {
     alert('Ошибка удаления: ' + e.message);
+  }
+}
+
+// ═══════ Эра перемен ═══════
+let eraArticles = [];
+let eraLoaded = false;
+
+function eraInit() {
+  eraTab('articles', document.getElementById('era-tab-articles'));
+  if (!eraLoaded) eraLoadArticles();
+  eraProgressStart();
+}
+
+// ── Живой журнал операций ──
+let eraProgressTimer = null;
+let eraProgressLast = 0;
+
+function eraProgressStart() {
+  if (eraProgressTimer) return;
+  eraProgressTimer = setInterval(eraProgressPoll, 3000);
+  eraProgressPoll();
+}
+
+async function eraProgressPoll() {
+  // опрашиваем только когда страница «Эра перемен» открыта
+  const page = document.getElementById('page-wip-era');
+  if (!page || !page.classList.contains('active')) return;
+  try {
+    const r = await fetch('/api/era/progress?after=' + eraProgressLast);
+    const d = await r.json();
+    if (!d.ok || !d.log.length) return;
+    eraProgressLast = d.log[d.log.length - 1].t;
+    for (const boxId of ['era-progress-log', 'era-progress-log-articles']) {
+      const box = document.getElementById(boxId);
+      if (!box) continue;
+      box.style.display = 'block';
+      for (const e of d.log) {
+        const line = document.createElement('div');
+        const time = new Date(e.t).toLocaleTimeString('ru-RU');
+        line.textContent = time + '  ' + e.msg;
+        if (e.msg.startsWith('✅')) line.style.color = '#4ade80';
+        if (e.msg.startsWith('🔒') || e.msg.startsWith('✗')) line.style.color = '#f87171';
+        box.appendChild(line);
+      }
+      while (box.children.length > 100) box.removeChild(box.firstChild);
+      box.scrollTop = box.scrollHeight;
+    }
+  } catch {}
+}
+
+function eraTab(name, btn) {
+  document.querySelectorAll('.era-panel').forEach(p => p.style.display = 'none');
+  document.querySelectorAll('[id^="era-tab-"]').forEach(b => b.classList.remove('active'));
+  document.getElementById('era-panel-' + name).style.display = 'block';
+  if (btn) btn.classList.add('active');
+  if (name === 'videos' && eraLoaded) eraYtRender();
+}
+
+async function eraLoadArticles() {
+  try {
+    const r = await fetch('/api/era/articles');
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error);
+    eraArticles = d.articles;
+    eraLoaded = true;
+    const withText = eraArticles.filter(a => a.hasText).length;
+    document.getElementById('era-stats').textContent =
+      eraArticles.length + ' статей, с текстом: ' + withText + (d.hasCookie ? ' · 🔑 cookie есть' : ' · без cookie');
+    // Категории в фильтр
+    const sel = document.getElementById('era-cat-filter');
+    const cats = [...new Set(eraArticles.map(a => a.category))];
+    sel.innerHTML = '<option value="">Все категории (' + eraArticles.length + ')</option>'
+      + cats.map(c => '<option value="' + c + '">' + (eraArticles.find(a => a.category === c)?.categoryName || c)
+        + ' (' + eraArticles.filter(a => a.category === c).length + ')</option>').join('');
+    eraRenderArticles();
+  } catch (e) {
+    document.getElementById('era-articles-status').textContent = '✗ ' + e.message;
+  }
+}
+
+function eraRenderArticles() {
+  const cat = document.getElementById('era-cat-filter').value;
+  const list = cat ? eraArticles.filter(a => a.category === cat) : eraArticles;
+  const el = document.getElementById('era-articles-table');
+  if (!list.length) {
+    el.innerHTML = '<p style="color:var(--text-muted);">Список пуст. Нажмите «Обновить список статей».</p>';
+    return;
+  }
+  el.innerHTML = '<table style="width:100%;border-collapse:collapse;">'
+    + '<tr style="color:var(--text-muted);text-align:left;font-size:11px;"><th style="padding:6px;">Дата</th><th style="padding:6px;">Заголовок</th><th style="padding:6px;">Категория</th><th style="padding:6px;">Текст</th></tr>'
+    + list.map(a => '<tr style="border-top:1px solid var(--border);">'
+      + '<td style="padding:6px;white-space:nowrap;color:var(--text-muted);">' + (a.date || '—') + '</td>'
+      + '<td style="padding:6px;"><a href="' + a.url + '" target="_blank" style="color:var(--text);text-decoration:none;">' + a.title + '</a></td>'
+      + '<td style="padding:6px;font-size:11px;color:var(--text-muted);">' + (a.categoryName || a.category) + '</td>'
+      + '<td style="padding:6px;">' + (a.hasText ? '✅' : (a.locked ? '🔒' : '—')) + '</td>'
+      + '</tr>').join('')
+    + '</table>';
+}
+
+async function eraScrapeList() {
+  const btn = document.getElementById('era-scrape-list-btn');
+  const st = document.getElementById('era-articles-status');
+  btn.disabled = true; st.textContent = '⏳ Сканирую категории (займёт ~минуту)...';
+  try {
+    const r = await fetch('/api/era/scrape-list', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error);
+    st.textContent = '✓ Новых: ' + d.added + ', всего: ' + d.total;
+    await eraLoadArticles();
+  } catch (e) { st.textContent = '✗ ' + e.message; }
+  finally { btn.disabled = false; }
+}
+
+async function eraScrapeTexts() {
+  const btn = document.getElementById('era-scrape-texts-btn');
+  const st = document.getElementById('era-articles-status');
+  btn.disabled = true; st.textContent = '⏳ Скачиваю тексты...';
+  try {
+    const r = await fetch('/api/era/scrape-texts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ limit: 30 }) });
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error);
+    st.textContent = '✓ Скачано: ' + d.done + ', закрыто пейволлом: ' + d.locked + ', осталось: ' + d.remaining;
+    await eraLoadArticles();
+  } catch (e) { st.textContent = '✗ ' + e.message; }
+  finally { btn.disabled = false; }
+}
+
+async function eraSaveCookie() {
+  const st = document.getElementById('era-cookie-status');
+  const cookie = document.getElementById('era-cookie-input').value.trim();
+  if (!cookie) { st.textContent = 'Вставьте cookie'; return; }
+  st.textContent = '⏳ Проверяю доступ...';
+  try {
+    const r = await fetch('/api/era/session', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cookie }) });
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error);
+    st.textContent = d.valid === true ? '✅ Доступ к платным статьям подтверждён!'
+      : d.valid === false ? '⚠️ Cookie сохранён, но платная статья всё ещё закрыта — проверьте, что скопировали целиком'
+      : '💾 Cookie сохранён (проверка будет при скачивании)';
+    eraLoadArticles();
+  } catch (e) { st.textContent = '✗ ' + e.message; }
+}
+
+function eraYtRender() {
+  const vids = eraArticles.filter(a => a.source === 'youtube');
+  const el = document.getElementById('era-yt-table');
+  if (!vids.length) { el.innerHTML = '<p style="color:var(--text-muted);">Нет видео. Нажмите «Импортировать».</p>'; return; }
+  const fd = s => { s = Math.round(s || 0); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+  el.innerHTML = '<table style="width:100%;border-collapse:collapse;">'
+    + '<tr style="color:var(--text-muted);text-align:left;font-size:11px;"><th style="padding:6px;">Дата</th><th style="padding:6px;">Название</th><th style="padding:6px;">Длит.</th><th style="padding:6px;">Транскрипт</th></tr>'
+    + vids.map(v => '<tr style="border-top:1px solid var(--border);">'
+      + '<td style="padding:6px;white-space:nowrap;color:var(--text-muted);">' + (v.date || '—') + '</td>'
+      + '<td style="padding:6px;"><a href="' + v.url + '" target="_blank" style="color:var(--text);text-decoration:none;">' + v.title + '</a></td>'
+      + '<td style="padding:6px;color:var(--text-muted);">' + (v.duration ? fd(v.duration) : '—') + '</td>'
+      + '<td style="padding:6px;">' + (v.hasText ? '✅ ' + Math.round((v.textLen || 0) / 1000) + 'к' : '—') + '</td>'
+      + '</tr>').join('')
+    + '</table>';
+}
+
+async function eraYtImport() {
+  const btn = document.getElementById('era-yt-import-btn');
+  const st = document.getElementById('era-yt-status');
+  btn.disabled = true; st.textContent = '⏳ Получаю список видео...';
+  try {
+    const r = await fetch('/api/era/yt-list', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ count: 10 }) });
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error);
+    st.textContent = '✓ Добавлено: ' + d.added + ', всего видео: ' + d.total;
+    await eraLoadArticles();
+    eraYtRender();
+  } catch (e) { st.textContent = '✗ ' + e.message; }
+  finally { btn.disabled = false; }
+}
+
+async function eraYtTranscribeAll() {
+  const openaiKey = localStorage.getItem('openai_api_key') || '';
+  if (!openaiKey) return alert('Нужен OpenAI API ключ — добавьте его в ⚙️ Настройках API');
+  const btn = document.getElementById('era-yt-transcribe-btn');
+  const st = document.getElementById('era-yt-status');
+  btn.disabled = true;
+  try {
+    for (let i = 0; i < 50; i++) {
+      st.textContent = '⏳ Скачиваю и транскрибирую... (может занять несколько минут на видео)';
+      const r = await fetch('/api/era/yt-transcribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ openaiKey }) });
+      const d = await r.json();
+      if (!d.ok) throw new Error(d.error);
+      if (d.done) { st.textContent = '✅ Все видео транскрибированы'; break; }
+      st.textContent = '✓ ' + (d.title || d.transcribed) + ' · осталось: ' + d.remaining;
+      await eraLoadArticles();
+      eraYtRender();
+      if (!d.remaining) { st.textContent = '✅ Готово — все видео транскрибированы'; break; }
+    }
+  } catch (e) { st.textContent = '✗ ' + e.message; }
+  finally { btn.disabled = false; }
+}
+
+// ── Эра перемен: чат ──
+let eraChatHistory = [];
+
+function eraChatBubble(role, html) {
+  const box = document.getElementById('era-chat-messages');
+  const div = document.createElement('div');
+  div.style.cssText = role === 'user'
+    ? 'align-self:flex-end;max-width:75%;background:var(--accent);color:#fff;border-radius:12px 12px 2px 12px;padding:10px 14px;font-size:13px;white-space:pre-wrap;'
+    : 'align-self:flex-start;max-width:85%;background:var(--bg-panel);border:1px solid var(--border);border-radius:12px 12px 12px 2px;padding:10px 14px;font-size:13px;line-height:1.55;';
+  div.innerHTML = html;
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+  return div;
+}
+
+function eraEsc(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+async function eraChatSend() {
+  const input = document.getElementById('era-chat-input');
+  const question = input.value.trim();
+  if (!question) return;
+  const anthropicKey = localStorage.getItem('anthropic_api_key') || '';
+  const openrouterKey = localStorage.getItem('openrouter_api_key') || '';
+  if (!anthropicKey && !openrouterKey) return alert('Нужен Anthropic или OpenRouter API ключ — добавьте в ⚙️ Настройках API');
+  input.value = '';
+  document.getElementById('era-chat-send').disabled = true;
+
+  // приветственную заглушку убираем
+  const box = document.getElementById('era-chat-messages');
+  if (eraChatHistory.length === 0) box.innerHTML = '';
+
+  eraChatBubble('user', eraEsc(question));
+  const thinking = eraChatBubble('assistant', '⏳ Ищу по базе и анализирую...');
+  try {
+    const r = await fetch('/api/era/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question, anthropicKey, openrouterKey, history: eraChatHistory }),
+    });
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error);
+    let html = eraEsc(d.answer).replace(/\n/g, '<br>');
+    if (d.sources?.length) {
+      html += '<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--border);font-size:11px;color:var(--text-muted);">Источники:<br>'
+        + d.sources.map(s => '[' + s.n + '] <a href="' + s.url + '" target="_blank" style="color:var(--accent);">' + eraEsc(s.title) + '</a> · ' + s.date + (s.source === 'youtube' ? ' · ▶️' : '')).join('<br>')
+        + '</div>';
+    }
+    thinking.innerHTML = html;
+    eraChatHistory.push({ role: 'user', content: question }, { role: 'assistant', content: d.answer });
+    if (eraChatHistory.length > 12) eraChatHistory = eraChatHistory.slice(-12);
+  } catch (e) {
+    thinking.innerHTML = '<span style="color:#e5484d;">✗ ' + eraEsc(e.message) + '</span>';
+  } finally {
+    document.getElementById('era-chat-send').disabled = false;
+    box.scrollTop = box.scrollHeight;
   }
 }
 

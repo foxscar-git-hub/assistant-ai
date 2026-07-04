@@ -122,21 +122,40 @@ app.post('/api/kie/save-key', async (req, res) => {
   }
 });
 
+// ── Shared: привести вход (data URI / raw base64 / локальный путь / http URL) к data URI ──
+function localFileFromUrl(u) {
+  if (u.startsWith('/vref-processed/')) return path.join(__dirname, 'data', 'vref-processed', path.basename(u));
+  if (u.startsWith('/cut-files/')) return path.join(__dirname, 'data', 'cut-uploads', path.basename(u));
+  return null;
+}
+async function resolveImageInput(input) {
+  if (!input || typeof input !== 'string' || input.startsWith('data:')) return input;
+  const lf = localFileFromUrl(input);
+  if (lf && fs.existsSync(lf)) {
+    const ext = path.extname(lf).toLowerCase();
+    const mime = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
+    return `data:${mime};base64,` + fs.readFileSync(lf).toString('base64');
+  }
+  if (/^https?:\/\//i.test(input)) {
+    const r = await fetch(input);
+    if (!r.ok) throw new Error('Не удалось скачать изображение: HTTP ' + r.status);
+    const ct = (r.headers.get('content-type') || 'image/jpeg').split(';')[0];
+    return `data:${ct};base64,` + Buffer.from(await r.arrayBuffer()).toString('base64');
+  }
+  return input; // raw base64
+}
+
 // ── Shared: загрузка base64 на KIE, возвращает URL ──
+// Актуальный эндпоинт (проверено на docs.kie.ai/file-upload-api/upload-file-base-64,
+// старый multipart /api/v1/upload отдаёт 404 — KIE его убрали)
 async function kieUploadBase64(base64, reqKey, filename = 'image.jpg') {
-  const buf = Buffer.from(base64.replace(/^data:[^;]+;base64,/, ''), 'base64');
-  // Use native fetch FormData (Node 18+) — FormData sets multipart boundary automatically
-  const { Blob } = require('buffer');
-  const blob = new Blob([buf], { type: 'image/jpeg' });
-  const form = new FormData();
-  form.append('file', blob, filename);
-  const r = await fetch(KIE_BASE + '/upload', {
+  const r = await fetch('https://kieai.redpandaai.co/api/file-base64-upload', {
     method: 'POST',
-    headers: { 'Authorization': 'Bearer ' + reqKey },
-    body: form
+    headers: { 'Authorization': 'Bearer ' + reqKey, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ base64Data: base64, uploadPath: 'images/videogen', fileName: filename })
   });
   const data = await r.json();
-  if (data?.data?.url) return data.data.url;
+  if (data?.data?.downloadUrl) return data.data.downloadUrl;
   throw new Error(data?.msg || JSON.stringify(data));
 }
 
@@ -147,7 +166,8 @@ app.post('/api/kie/upload-image', async (req, res) => {
   const reqKey = req.headers['x-kie-key'] || kieKey();
   if (!reqKey) return res.json({ ok: false, error: 'KIE API ключ не задан' });
   try {
-    const url = await kieUploadBase64(base64, reqKey, filename);
+    const resolved = await resolveImageInput(base64);
+    const url = await kieUploadBase64(resolved, reqKey, filename);
     return res.json({ ok: true, url });
   } catch (e) {
     res.json({ ok: false, error: e.message });
@@ -162,8 +182,8 @@ app.post('/api/analyze-image', async (req, res) => {
     if (!base64) return res.json({ ok: false, error: 'base64 не передан' });
     if (!key) return res.json({ ok: false, error: 'Нужен OpenAI API ключ' });
 
-    // Ensure base64 has data URI prefix
-    const dataUrl = base64.startsWith('data:') ? base64 : 'data:image/jpeg;base64,' + base64;
+    // Принимает http(s)-URL, локальный путь библиотеки (/vref-processed/...) или base64
+    const dataUrl = /^https?:\/\//.test(base64) ? base64 : await resolveImageInput(base64);
 
     const r = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -266,7 +286,7 @@ app.post('/api/kie/upscale-image', async (req, res) => {
     if (!openaiKey) return res.json({ ok: false, error: 'Нужен OpenAI API ключ в настройках' });
 
     const url = await openaiImageEdit(
-      base64,
+      await resolveImageInput(base64),
       'Upscale and enhance this product image to maximum quality. Preserve every detail exactly — colors, textures, patterns, logos, composition. Make it sharper and cleaner. Do not change or add anything.',
       openaiKey, '1024x1024'
     );
@@ -285,7 +305,7 @@ app.post('/api/kie/multiangle-image', async (req, res) => {
 
     const desc = productDescription ? ` Product details: ${productDescription.slice(0, 300)}.` : '';
     const url = await openaiImageEdit(
-      base64,
+      await resolveImageInput(base64),
       `Create a product reference sheet showing this exact product from 4 angles arranged in a 2x2 grid: front view (top-left), right side view (top-right), back view (bottom-left), 45-degree angle view (bottom-right). Clean white background, professional studio lighting, product photography style.${desc} Preserve all product details, colors, textures, logos exactly.`,
       openaiKey, '1024x1024'
     );
@@ -486,14 +506,16 @@ app.post('/api/videogen', async (req, res) => {
   try {
     const reqKey = req.headers['x-kie-key'] || kieKey();
     const { prompt, quality = 'fast', resolution = '720p', aspect_ratio = '16:9',
-            duration = 5, image_url, end_image_url, model: modelType = 'seedance' } = req.body;
+            duration = 5, image_url, end_image_url, image_urls,
+            model: modelType = 'seedance' } = req.body;
     if (!prompt) return res.json({ ok: false, error: 'prompt обязателен' });
     if (!reqKey) return res.json({ ok: false, error: 'KIE API ключ не задан' });
 
-    // Model ID mapping (verified from KIE playground pages)
+    // Model ID mapping (verified from docs.kie.ai/market)
     const MODEL_IDS = {
       seedance_pro:  'bytedance/seedance-2',
       seedance_fast: 'bytedance/seedance-2-fast',
+      seedance_mini: 'bytedance/seedance-2-mini',
       veo:           'veo-3-1',
       omni_video:    'gemini-omni-video',
       omni_audio:    'gemini-omni-audio',
@@ -502,31 +524,44 @@ app.post('/api/videogen', async (req, res) => {
     let modelId;
     if (modelType === 'veo')  modelId = MODEL_IDS.veo;
     else if (modelType === 'omni') modelId = MODEL_IDS.omni_video;
-    else modelId = quality === 'pro' ? MODEL_IDS.seedance_pro : MODEL_IDS.seedance_fast;
+    else modelId = quality === 'pro' ? MODEL_IDS.seedance_pro
+               : quality === 'mini' ? MODEL_IDS.seedance_mini
+               : MODEL_IDS.seedance_fast;
 
     // Normalize resolution and duration per model
-    let resolNorm = resolution || '720p';
+    let resolNorm = (resolution || '720p').toLowerCase();
     let dur = parseInt(duration) || 5;
+    let input;
 
     if (modelType === 'omni') {
-      // Omni: only 720p / 1080p / 4k (lowercase), no 480p
+      // Omni (gemini-omni-video): resolution 720p/1080p/4k, duration 4/6/8/10,
+      // aspect only 16:9 | 9:16, images go as image_urls array (up to 7)
       if (!['720p','1080p','4k'].includes(resolNorm)) resolNorm = '720p';
-      // Omni: only discrete values 4, 6, 8, 10
       const omniDurs = [4, 6, 8, 10];
       dur = omniDurs.reduce((prev, curr) => Math.abs(curr - dur) < Math.abs(prev - dur) ? curr : prev);
+      const ar = ['16:9','9:16'].includes(aspect_ratio) ? aspect_ratio : '16:9';
+      input = { prompt, resolution: resolNorm, aspect_ratio: ar, duration: String(dur) };
+      const urls = [...(Array.isArray(image_urls) ? image_urls : []),
+                    ...(image_url ? [image_url] : []),
+                    ...(end_image_url ? [end_image_url] : [])].filter(Boolean);
+      if (urls.length) input.image_urls = urls.slice(0, 7);
     } else if (modelType === 'veo') {
       // Veo: only 720p / 1080p, duration 4/6/8
       if (!['720p','1080p'].includes(resolNorm)) resolNorm = '720p';
       const veoDurs = [4, 6, 8];
       dur = veoDurs.reduce((prev, curr) => Math.abs(curr - dur) < Math.abs(prev - dur) ? curr : prev);
+      input = { prompt, resolution: resolNorm, aspect_ratio, duration: String(dur), nsfw_checker: true };
+      if (image_url) input.first_frame_url = image_url;
+      if (end_image_url) input.last_frame_url = end_image_url;
     } else {
-      // Seedance: 480p/720p/1080p/4k, duration 4-15
-      if (!['480p','720p','1080p','4k','4K'].includes(resolNorm)) resolNorm = '720p';
+      // Seedance: pro (seedance-2) 480p-4k; fast/mini only 480p/720p; duration 4-15
+      const allowedRes = quality === 'pro' ? ['480p','720p','1080p','4k'] : ['480p','720p'];
+      if (!allowedRes.includes(resolNorm)) resolNorm = '720p';
       dur = Math.max(4, Math.min(15, dur));
+      input = { prompt, resolution: resolNorm, aspect_ratio, duration: String(dur), nsfw_checker: true };
+      if (image_url) input.first_frame_url = image_url;
+      if (end_image_url) input.last_frame_url = end_image_url;
     }
-    const input = { prompt, resolution: resolNorm, aspect_ratio, duration: String(dur), nsfw_checker: true };
-    if (image_url) input.first_frame_url = image_url;
-    if (end_image_url) input.last_frame_url = end_image_url;
     const data = await kiePost('/jobs/createTask', { model: modelId, input }, reqKey);
     if (data.code !== 200 && !data.data?.taskId) {
       return res.json({ ok: false, error: data.msg || JSON.stringify(data) });
@@ -584,18 +619,23 @@ function ffmpegExec(args) {
   });
 }
 
-// Helper: get video duration via ffmpeg
-function getVideoDuration(filePath) {
+// Helper: get video duration + dimensions via ffmpeg
+function getVideoInfo(filePath) {
   return new Promise((resolve, reject) => {
-    execFile(FFMPEG, ['-i', filePath, '-f', 'null', '-'], { maxBuffer: 2 * 1024 * 1024 }, (err, stdout, stderr) => {
-      // ffmpeg always exits with error when outputting to null, parse stderr
-      const m = (stderr || '').match(/Duration:\s*(\d+):(\d+):(\d+\.?\d*)/);
-      if (m) {
-        const dur = parseInt(m[1]) * 3600 + parseInt(m[2]) * 60 + parseFloat(m[3]);
-        resolve(dur);
-      } else {
-        reject(new Error('Cannot read video duration'));
-      }
+    // No output args: ffmpeg prints stream info to stderr and exits instantly
+    // (decoding the whole file just to read dimensions would take minutes on 3 GB video)
+    execFile(FFMPEG, ['-i', filePath], { maxBuffer: 2 * 1024 * 1024 }, (err, stdout, stderr) => {
+      const s = stderr || '';
+      const m = s.match(/Duration:\s*(\d+):(\d+):(\d+\.?\d*)/);
+      if (!m) return reject(new Error('Cannot read video duration'));
+      const duration = parseInt(m[1]) * 3600 + parseInt(m[2]) * 60 + parseFloat(m[3]);
+      const vm = s.match(/Video:.*?(\d{2,5})x(\d{2,5})/);
+      let width = vm ? parseInt(vm[1]) : 0;
+      let height = vm ? parseInt(vm[2]) : 0;
+      // Phone videos are often stored rotated with metadata
+      const rot = s.match(/rotation of (-?\d+)/) || s.match(/rotate\s*:\s*(-?\d+)/);
+      if (rot && Math.abs(parseInt(rot[1])) % 180 === 90) [width, height] = [height, width];
+      resolve({ duration, width, height });
     });
   });
 }
@@ -612,8 +652,9 @@ app.post('/api/cut/upload', (req, res, next) => {
     const projectId = req.body?.projectId || req._cutProjectId || ('proj_' + Date.now());
     const filePath = req.file.path;
     const size = req.file.size;
-    const duration = await getVideoDuration(filePath);
-    res.json({ ok: true, projectId, filePath, duration, size });
+    const info = await getVideoInfo(filePath);
+    try { fs.writeFileSync(path.join(path.dirname(filePath), 'video-info.json'), JSON.stringify(info)); } catch {}
+    res.json({ ok: true, projectId, filePath, duration: info.duration, size, width: info.width, height: info.height });
   } catch (e) {
     res.json({ ok: false, error: e.message });
   }
@@ -745,7 +786,7 @@ Rules:
 // POST /api/cut/execute
 app.post('/api/cut/execute', async (req, res) => {
   try {
-    const { projectId, cuts, format = 'vertical' } = req.body || {};
+    const { projectId, cuts, format = 'vertical', smartCrop = null } = req.body || {};
     if (!projectId || !cuts?.length) return res.json({ ok: false, error: 'projectId и cuts обязательны' });
 
     const dir = path.join(__dirname, 'data', 'cut-uploads', projectId);
@@ -757,10 +798,20 @@ app.post('/api/cut/execute', async (req, res) => {
     fs.mkdirSync(clipsDir, { recursive: true });
 
     const isVertical = format === 'vertical';
-    // Filter/scale for output format
-    const vfFilter = isVertical
-      ? 'scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920'
-      : 'scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080';
+    const [W, H] = isVertical ? [1080, 1920] : [1920, 1080];
+    // Filter/scale for output format: default = center crop filling the frame
+    const vfFilter = `scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H}`;
+    // Smart crop: crop only P% of the excess, fit the rest over a blurred background
+    // (стандартный приём CapCut/OpusClip для гор.→верт. конвертации)
+    const p = smartCrop === null || smartCrop === undefined ? null : Math.max(0, Math.min(100, Number(smartCrop))) / 100;
+    const useSmart = p !== null && p < 1;
+    const smartFilter = useSmart
+      ? `[0:v]split=2[bgsrc][fgsrc];`
+        + `[bgsrc]scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H},boxblur=20:2[bg];`
+        + `[fgsrc]crop=w='if(gt(iw/ih,${W}/${H}),iw-(iw-ih*${W}/${H})*${p},iw)':h='if(gt(iw/ih,${W}/${H}),ih,ih-(ih-iw*${H}/${W})*${p})',`
+        + `scale=${W}:${H}:force_original_aspect_ratio=decrease:force_divisible_by=2[fg];`
+        + `[bg][fg]overlay=(W-w)/2:(H-h)/2`
+      : null;
 
     const resultClips = [];
     for (let i = 0; i < cuts.length; i++) {
@@ -775,7 +826,7 @@ app.post('/api/cut/execute', async (req, res) => {
         '-ss', String(start),
         '-i', videoPath,
         '-t', String(duration),
-        '-vf', vfFilter,
+        ...(useSmart ? ['-filter_complex', smartFilter] : ['-vf', vfFilter]),
         '-c:v', 'libx264',
         '-preset', 'fast',
         '-crf', '23',
@@ -798,6 +849,25 @@ app.post('/api/cut/execute', async (req, res) => {
     fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2));
 
     res.json({ ok: true, clips: resultClips });
+  } catch (e) {
+    res.json({ ok: false, error: e.message });
+  }
+});
+
+// GET /api/cut/projects/:projectId/probe — размеры и ориентация оригинала (с кэшем)
+app.get('/api/cut/projects/:projectId/probe', async (req, res) => {
+  try {
+    const dir = path.join(__dirname, 'data', 'cut-uploads', path.basename(req.params.projectId));
+    const infoPath = path.join(dir, 'video-info.json');
+    try {
+      const cached = JSON.parse(fs.readFileSync(infoPath, 'utf8'));
+      if (cached.width) return res.json({ ok: true, ...cached });
+    } catch {}
+    const files = fs.existsSync(dir) ? fs.readdirSync(dir).filter(f => f.startsWith('original.')) : [];
+    if (!files.length) return res.json({ ok: false, error: 'Видео не найдено. Загрузите файл.' });
+    const info = await getVideoInfo(path.join(dir, files[0]));
+    fs.writeFileSync(infoPath, JSON.stringify(info));
+    res.json({ ok: true, ...info });
   } catch (e) {
     res.json({ ok: false, error: e.message });
   }
@@ -855,6 +925,389 @@ app.delete('/api/cut/projects/:projectId/clips/:filename', (req, res) => {
       fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2));
     } catch {}
     res.json({ ok: true });
+  } catch (e) {
+    res.json({ ok: false, error: e.message });
+  }
+});
+
+// ── Era Peremen (eraperemen.info) endpoints ──
+
+const ERA_DIR = path.join(__dirname, 'data', 'era');
+const ERA_TEXTS_DIR = path.join(ERA_DIR, 'texts');
+fs.mkdirSync(ERA_TEXTS_DIR, { recursive: true });
+const ERA_BASE = 'https://eraperemen.info';
+const ERA_CATEGORIES = {
+  politics: 'Политическая аналитика и прогнозы',
+  'ispolnennye-prognozy': 'Исполненные прогнозы',
+  'fin-markets': 'Рыночная аналитика',
+  kriptoanalitika: 'Аналитика блокчейн-индустрии',
+  'crypto-markets': 'Новости криптоиндустрии',
+};
+const ERA_PAYWALL_MARKER = 'необходимо приобрести подписку';
+
+const eraArticlesPath = path.join(ERA_DIR, 'articles.json');
+const eraLoadArticles = () => { try { return JSON.parse(fs.readFileSync(eraArticlesPath, 'utf8')); } catch { return []; } };
+const eraSaveArticles = list => fs.writeFileSync(eraArticlesPath, JSON.stringify(list, null, 2));
+const eraCookiePath = path.join(ERA_DIR, 'session.json');
+const eraCookie = () => { try { return JSON.parse(fs.readFileSync(eraCookiePath, 'utf8')).cookie || ''; } catch { return ''; } };
+
+async function eraFetch(urlPath) {
+  const r = await fetch(ERA_BASE + urlPath, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36',
+      ...(eraCookie() ? { Cookie: eraCookie() } : {}),
+    },
+  });
+  return r.text();
+}
+
+function eraStripTags(html) {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|h\d|li)>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#8212;/g, '—').replace(/&#8211;/g, '–').replace(/&laquo;/g, '«').replace(/&raquo;/g, '»')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+// GET /api/era/articles — список статей (без полных текстов)
+app.get('/api/era/articles', (req, res) => {
+  const list = eraLoadArticles().map(a => ({ ...a, text: undefined }));
+  res.json({ ok: true, articles: list, hasCookie: !!eraCookie() });
+});
+
+// GET /api/era/article/:slug — полный текст
+app.get('/api/era/article/:slug', (req, res) => {
+  const slug = path.basename(req.params.slug);
+  const a = eraLoadArticles().find(x => x.slug === slug);
+  if (!a) return res.json({ ok: false, error: 'Статья не найдена' });
+  let text = '';
+  try { text = fs.readFileSync(path.join(ERA_TEXTS_DIR, slug + '.txt'), 'utf8'); } catch {}
+  res.json({ ok: true, article: { ...a, text } });
+});
+
+// POST /api/era/session { cookie } — сохранить cookie авторизации с сайта
+app.post('/api/era/session', async (req, res) => {
+  try {
+    const { cookie } = req.body || {};
+    if (!cookie) return res.json({ ok: false, error: 'cookie обязателен' });
+    fs.writeFileSync(eraCookiePath, JSON.stringify({ cookie, savedAt: Date.now() }));
+    // Проверяем доступ: платная статья не должна показывать пейволл
+    const list = eraLoadArticles();
+    const probe = list.find(a => a.locked) || list[0];
+    let valid = null;
+    if (probe) {
+      const html = await eraFetch('/' + probe.slug);
+      valid = !html.includes(ERA_PAYWALL_MARKER);
+    }
+    res.json({ ok: true, valid });
+  } catch (e) {
+    res.json({ ok: false, error: e.message });
+  }
+});
+
+// POST /api/era/scrape-list { categories? } — собрать список статей по категориям
+app.post('/api/era/scrape-list', async (req, res) => {
+  try {
+    const cats = req.body?.categories?.length ? req.body.categories : Object.keys(ERA_CATEGORIES);
+    const list = eraLoadArticles();
+    const known = new Set(list.map(a => a.slug));
+    let added = 0, scanned = 0;
+    for (const cat of cats) {
+      for (let page = 1; page <= 60; page++) {
+        const html = await eraFetch('/' + cat + (page > 1 ? '?page=' + page : ''));
+        const items = [...html.matchAll(/<h2><a href="\/([^"]+)">([\s\S]*?)<\/a><\/h2>[\s\S]{0,400}?article-date'>📅([\d.]+)/g)];
+        if (!items.length) break;
+        scanned += items.length;
+        let newOnPage = 0;
+        for (const m of items) {
+          const slug = m[1];
+          if (known.has(slug)) continue;
+          known.add(slug);
+          newOnPage++;
+          added++;
+          list.push({
+            slug,
+            title: eraStripTags(m[2]),
+            date: m[3],
+            category: cat,
+            categoryName: ERA_CATEGORIES[cat] || cat,
+            url: ERA_BASE + '/' + slug,
+            source: 'site',
+            hasText: fs.existsSync(path.join(ERA_TEXTS_DIR, slug + '.txt')),
+            locked: null,
+          });
+        }
+        if (page > 1 && newOnPage === 0) break; // дальше только уже известные
+      }
+    }
+    // Сортировка по дате (DD.MM.YYYY) по убыванию
+    const key = d => (d || '').split('.').reverse().join('');
+    list.sort((a, b) => key(b.date).localeCompare(key(a.date)));
+    eraSaveArticles(list);
+    res.json({ ok: true, added, scanned, total: list.length });
+  } catch (e) {
+    res.json({ ok: false, error: e.message });
+  }
+});
+
+// POST /api/era/scrape-texts { limit? } — скачать тексты статей (нужен cookie для платных)
+app.post('/api/era/scrape-texts', async (req, res) => {
+  try {
+    const limit = Math.min(Number(req.body?.limit) || 30, 300);
+    const list = eraLoadArticles();
+    const todo = list.filter(a => !a.hasText).slice(0, limit);
+    let done = 0, locked = 0;
+    for (const a of todo) {
+      eraLog(`📄 «${a.title.slice(0, 60)}» (${a.date}) — скачиваю статью...`);
+      const html = await eraFetch('/' + a.slug);
+      const isLocked = html.includes(ERA_PAYWALL_MARKER);
+      a.locked = isLocked;
+      if (isLocked) { locked++; eraLog(`🔒 «${a.title.slice(0, 60)}» — закрыта пейволлом (нужен cookie)`); continue; }
+      // Контент между </h1> и блоком тегов/шаринга
+      let body = html.split('</h1>')[1] || '';
+      body = body.split('<ul class="container tag-menu"')[0].split('<div class="social"')[0];
+      const text = eraStripTags(body);
+      if (text.length < 200) { a.locked = true; locked++; continue; }
+      const tags = [...html.matchAll(/href='\/prognozy\/([^']+)'>([^<]+)</g)].map(m => m[2]);
+      a.tags = [...new Set(tags)];
+      fs.writeFileSync(path.join(ERA_TEXTS_DIR, a.slug + '.txt'), text);
+      a.hasText = true;
+      a.textLen = text.length;
+      done++;
+      eraLog(`✅ «${a.title.slice(0, 60)}» — текст сохранён, ${Math.round(text.length / 1000)}к символов`);
+      await new Promise(r => setTimeout(r, 400)); // не долбим сайт
+    }
+    eraSaveArticles(list);
+    res.json({ ok: true, done, locked, remaining: list.filter(x => !x.hasText).length });
+  } catch (e) {
+    res.json({ ok: false, error: e.message });
+  }
+});
+
+// ── Era Peremen: журнал прогресса ──
+const eraProgressLog = [];
+function eraLog(msg) {
+  eraProgressLog.push({ t: Date.now(), msg });
+  if (eraProgressLog.length > 200) eraProgressLog.splice(0, eraProgressLog.length - 200);
+}
+
+// GET /api/era/progress?after=<ts> — журнал операций
+app.get('/api/era/progress', (req, res) => {
+  const after = Number(req.query.after) || 0;
+  res.json({ ok: true, log: eraProgressLog.filter(e => e.t > after) });
+});
+
+// ── Era Peremen: чат по базе знаний ──
+
+// Примитивный полнотекстовый поиск: обрезаем окончания слов (грубый стемминг),
+// считаем вхождения, заголовок весит втрое, свежесть — тай-брейкер
+function eraSearchDocs(query, limit = 10) {
+  const list = eraLoadArticles().filter(a => a.hasText);
+  const terms = (query.toLowerCase().match(/[а-яёa-z0-9]{3,}/gi) || [])
+    .map(t => (t.length > 5 ? t.slice(0, Math.ceil(t.length * 0.75)) : t));
+  const scored = [];
+  for (const a of list) {
+    let text = '';
+    try { text = fs.readFileSync(path.join(ERA_TEXTS_DIR, a.slug + '.txt'), 'utf8'); } catch { continue; }
+    const titleLower = a.title.toLowerCase();
+    const lower = titleLower + '\n' + text.toLowerCase();
+    let score = 0;
+    for (const t of terms) {
+      const matches = lower.split(t).length - 1;
+      if (matches) score += Math.min(matches, 10) + (titleLower.includes(t) ? 3 : 0);
+    }
+    if (score > 0) scored.push({ a, text, score, dateKey: (a.date || '').split('.').reverse().join('') });
+  }
+  scored.sort((x, y) => y.score - x.score || y.dateKey.localeCompare(x.dateKey));
+  return scored.slice(0, limit);
+}
+
+// POST /api/era/chat { question, anthropicKey, history? }
+app.post('/api/era/chat', async (req, res) => {
+  try {
+    const { question, anthropicKey, openrouterKey, history = [] } = req.body || {};
+    if (!question) return res.json({ ok: false, error: 'question обязателен' });
+    if (!anthropicKey && !openrouterKey) return res.json({ ok: false, error: 'Нужен Anthropic или OpenRouter API ключ (⚙️ Настройки API)' });
+
+    const docs = eraSearchDocs(question, 10);
+    if (!docs.length) {
+      return res.json({ ok: true, answer: 'В базе пока нет материалов по этому вопросу. Скачайте тексты статей (вкладка «Статьи») или транскрибируйте видео (вкладка «Видео») — и я смогу ответить.', sources: [] });
+    }
+
+    const context = docs.map((d, i) =>
+      `[Источник ${i + 1}] ${d.a.title}\nДата: ${d.a.date} · ${d.a.source === 'youtube' ? 'Видео' : 'Статья'} · ${d.a.url}\n${d.text.slice(0, 4000)}`
+    ).join('\n\n════════\n\n');
+
+    const system = `Ты — аналитик проекта «Эра Перемен» (eraperemen.info). Твоя задача — отвечать на вопросы в стиле автора проекта, опираясь ИСКЛЮЧИТЕЛЬНО на предоставленные материалы (статьи сайта и транскрипты видео).
+
+Стиль автора: системный макроанализ, причинно-следственные цепочки, прямые смелые прогнозы с конкретными горизонтами (недели/месяцы/кварталы), уверенный тон без обтекаемых формулировок, внимание к структурным кризисам и переломным точкам.
+
+Правила:
+- Опирайся только на материалы из контекста. Если в них нет ответа — скажи прямо, не выдумывай.
+- Ссылайся на источники по номерам [1], [2] прямо в тексте.
+- Если автор в разных материалах менял оценку — покажи эволюцию по датам.
+- Учитывай даты материалов: свежие важнее старых.
+- Отвечай на русском.`;
+
+    const msgs = [
+      ...history.slice(-6).map(m => ({ role: m.role, content: m.content })),
+      { role: 'user', content: `Материалы базы знаний:\n\n${context}\n\n════════\n\nВопрос: ${question}` },
+    ];
+
+    let answer = '';
+    if (anthropicKey) {
+      const client = new Anthropic({ apiKey: anthropicKey });
+      const message = await client.messages.create({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 2500,
+        system,
+        messages: msgs,
+      });
+      answer = message.content[0]?.text?.trim() || '';
+    } else {
+      const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + openrouterKey,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'http://localhost:3000',
+        },
+        body: JSON.stringify({
+          model: 'anthropic/claude-sonnet-4-5',
+          max_tokens: 2500,
+          messages: [{ role: 'system', content: system }, ...msgs],
+        }),
+      });
+      const data = await r.json();
+      answer = data.choices?.[0]?.message?.content?.trim() || '';
+      if (!answer && data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+    }
+    res.json({
+      ok: true,
+      answer,
+      sources: docs.map((d, i) => ({ n: i + 1, title: d.a.title, date: d.a.date, url: d.a.url, source: d.a.source })),
+    });
+  } catch (e) {
+    res.json({ ok: false, error: e.message });
+  }
+});
+
+// ── Era Peremen: YouTube канал ──
+
+const ERA_AUDIO_DIR = path.join(ERA_DIR, 'audio');
+fs.mkdirSync(ERA_AUDIO_DIR, { recursive: true });
+const ERA_CHANNEL = 'https://www.youtube.com/@eraperemen/videos';
+const YTDLP = process.env.YTDLP_PATH || [
+  path.join(__dirname, 'bin', 'yt-dlp'),
+  path.join(process.env.HOME || '/Users/imac27-5k', 'Library/Python/3.9/bin/yt-dlp'),
+].find(p => fs.existsSync(p)) || 'yt-dlp';
+
+function ytdlpExec(args, timeoutMs = 300000) {
+  return new Promise((resolve, reject) => {
+    execFile(YTDLP, args, { maxBuffer: 20 * 1024 * 1024, timeout: timeoutMs }, (err, stdout, stderr) => {
+      if (err) reject(new Error((stderr || err.message).slice(-500)));
+      else resolve(stdout);
+    });
+  });
+}
+
+// POST /api/era/yt-list { count = 10 } — добавить последние N видео канала в базу
+app.post('/api/era/yt-list', async (req, res) => {
+  try {
+    const count = Math.min(Number(req.body?.count) || 10, 100);
+    const out = await ytdlpExec([
+      '--playlist-end', String(count), '--skip-download', '--no-warnings',
+      '--print', '%(id)s\t%(upload_date)s\t%(duration)s\t%(title)s',
+      ERA_CHANNEL,
+    ]);
+    const list = eraLoadArticles();
+    const known = new Set(list.map(a => a.slug));
+    let added = 0;
+    for (const line of out.trim().split('\n')) {
+      const [id, ud, dur, ...t] = line.split('\t');
+      if (!id || known.has('yt-' + id)) continue;
+      const date = ud && ud.length === 8 ? `${ud.slice(6, 8)}.${ud.slice(4, 6)}.${ud.slice(0, 4)}` : '';
+      list.push({
+        slug: 'yt-' + id,
+        title: (t.join('\t') || id).trim(),
+        date,
+        category: 'youtube',
+        categoryName: 'YouTube-канал',
+        url: 'https://www.youtube.com/watch?v=' + id,
+        source: 'youtube',
+        videoId: id,
+        duration: Number(dur) || null,
+        hasText: fs.existsSync(path.join(ERA_TEXTS_DIR, 'yt-' + id + '.txt')),
+        locked: false,
+      });
+      added++;
+    }
+    const key = d => (d || '').split('.').reverse().join('');
+    list.sort((a, b) => key(b.date).localeCompare(key(a.date)));
+    eraSaveArticles(list);
+    res.json({ ok: true, added, total: list.filter(a => a.source === 'youtube').length });
+  } catch (e) {
+    res.json({ ok: false, error: e.message });
+  }
+});
+
+// POST /api/era/yt-transcribe { videoId?, openaiKey? } — скачать аудио и транскрибировать одно видео
+// Без openaiKey только скачивает аудио. Без videoId берёт первое ютуб-видео без текста.
+app.post('/api/era/yt-transcribe', async (req, res) => {
+  try {
+    const { openaiKey } = req.body || {};
+    const list = eraLoadArticles();
+    const item = req.body?.videoId
+      ? list.find(a => a.videoId === req.body.videoId)
+      // без ключа режим "только скачивание" — берём видео, у которого ещё нет и аудио
+      : list.find(a => a.source === 'youtube' && !a.hasText
+          && (req.body?.openaiKey || !fs.existsSync(path.join(ERA_AUDIO_DIR, a.videoId + '.mp3'))));
+    if (!item) return res.json({ ok: true, done: true, message: 'Все видео обработаны' });
+
+    // 1. Скачиваем аудио (кэшируется)
+    const mp3Path = path.join(ERA_AUDIO_DIR, item.videoId + '.mp3');
+    if (!fs.existsSync(mp3Path)) {
+      const rawPath = path.join(ERA_AUDIO_DIR, item.videoId + '.raw');
+      eraLog(`▶️ «${item.title.slice(0, 60)}» — скачиваю аудио с YouTube...`);
+      await ytdlpExec(['-f', 'bestaudio', '--no-warnings', '-o', rawPath, item.url], 600000);
+      eraLog(`🎚 «${item.title.slice(0, 60)}» — сжимаю аудио для Whisper...`);
+      await ffmpegExec(['-y', '-i', rawPath, '-vn', '-ac', '1', '-ar', '16000', '-b:a', '32k', mp3Path]);
+      fs.unlinkSync(rawPath);
+    }
+    if (!openaiKey) {
+      eraLog(`✓ «${item.title.slice(0, 60)}» — аудио готово (без транскрибации)`);
+      return res.json({ ok: true, downloaded: item.videoId, transcribed: false, remaining: list.filter(a => a.source === 'youtube' && !a.hasText).length });
+    }
+
+    // 2. Whisper
+    const size = fs.statSync(mp3Path).size;
+    if (size > 25 * 1024 * 1024) return res.json({ ok: false, error: `Аудио ${item.videoId}: ${(size / 1e6).toFixed(0)} МБ > лимита Whisper 25 МБ` });
+    eraLog(`🎙 «${item.title.slice(0, 60)}» — транскрибирую через Whisper (${(size / 1e6).toFixed(1)} МБ)...`);
+    const form = new FormData();
+    form.append('file', new Blob([fs.readFileSync(mp3Path)], { type: 'audio/mpeg' }), item.videoId + '.mp3');
+    form.append('model', 'whisper-1');
+    form.append('language', 'ru');
+    form.append('response_format', 'verbose_json');
+    const r = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + openaiKey },
+      body: form,
+    });
+    const data = await r.json();
+    if (data.error) return res.json({ ok: false, error: data.error.message || JSON.stringify(data.error) });
+
+    fs.writeFileSync(path.join(ERA_TEXTS_DIR, item.slug + '.txt'), data.text || '');
+    fs.writeFileSync(path.join(ERA_TEXTS_DIR, item.slug + '.segments.json'), JSON.stringify(data.segments || []));
+    item.hasText = true;
+    item.textLen = (data.text || '').length;
+    eraSaveArticles(list);
+    eraLog(`✅ «${item.title.slice(0, 60)}» — транскрипт готов, ${Math.round(item.textLen / 1000)}к символов. Осталось видео: ${list.filter(a => a.source === 'youtube' && !a.hasText).length}`);
+    res.json({ ok: true, transcribed: item.videoId, title: item.title, textLen: item.textLen, remaining: list.filter(a => a.source === 'youtube' && !a.hasText).length });
   } catch (e) {
     res.json({ ok: false, error: e.message });
   }
