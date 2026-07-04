@@ -82,7 +82,9 @@ app.post('/api/kie/check-key', async (req, res) => {
     if (data?.code === 401 || data?.code === 403) {
       return res.json({ ok: false, error: data?.msg || 'Неверный ключ' });
     }
-    res.json({ ok: true, credits: data?.data?.credits ?? data?.credits ?? null });
+    // GET /chat/credit возвращает { code, msg, data: <number> } — data сразу число,
+    // а не объект с полем credits (см. docs.kie.ai/common-api/get-account-credits)
+    res.json({ ok: true, credits: typeof data?.data === 'number' ? data.data : (data?.data?.credits ?? null) });
   } catch (e) {
     res.json({ ok: false, error: e.message });
   }
@@ -95,7 +97,28 @@ app.get('/api/kie/balance', async (req, res) => {
     if (!reqKey) return res.json({ ok: false, error: 'Ключ не задан' });
     const data = await kieGet('/chat/credit', reqKey);
     if (data?.code === 401) return res.json({ ok: false, error: 'Неверный ключ' });
-    res.json({ ok: true, credits: data?.data?.credits ?? data?.credits ?? null });
+    res.json({ ok: true, credits: typeof data?.data === 'number' ? data.data : (data?.data?.credits ?? null) });
+  } catch (e) {
+    res.json({ ok: false, error: e.message });
+  }
+});
+
+// ── OpenRouter: баланс (GET /api/v1/credits → { data: { total_credits, total_usage } }) ──
+app.get('/api/openrouter/balance', async (req, res) => {
+  try {
+    const reqKey = req.headers['x-openrouter-key'];
+    if (!reqKey) return res.json({ ok: false, error: 'Ключ не задан' });
+    const r = await fetch('https://openrouter.ai/api/v1/credits', {
+      headers: { 'Authorization': 'Bearer ' + reqKey }
+    });
+    const data = await r.json();
+    if (data?.error) return res.json({ ok: false, error: data.error.message || 'Неверный ключ' });
+    const total = data?.data?.total_credits;
+    const used = data?.data?.total_usage;
+    if (typeof total !== 'number' || typeof used !== 'number') {
+      return res.json({ ok: false, error: 'Неожиданный формат ответа OpenRouter' });
+    }
+    res.json({ ok: true, credits: Math.max(0, total - used) });
   } catch (e) {
     res.json({ ok: false, error: e.message });
   }
