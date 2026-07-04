@@ -2073,7 +2073,20 @@ const VGEN_HIST_KEY = 'vgen_history';
 const VGEN_HIST_MAX = 300;
 
 function vgenHistoryLoad() {
-  try { return JSON.parse(localStorage.getItem(VGEN_HIST_KEY) || '[]'); } catch { return []; }
+  try {
+    const list = JSON.parse(localStorage.getItem(VGEN_HIST_KEY) || '[]');
+    // Чинит последствия более ранней (ошибочной) версии этой фичи: та миграция
+    // проставляла projectId всем старым записям под первый открытый проект,
+    // но никогда не трогала cardId. По этому отпечатку (projectId есть, cardId
+    // как ключ отсутствует) отличаем испорченные записи и снимаем метку — тогда
+    // они снова показываются во всех проектах, а не только в одном неверном.
+    let repaired = false;
+    list.forEach(item => {
+      if (item.projectId && !('cardId' in item)) { delete item.projectId; repaired = true; }
+    });
+    if (repaired) localStorage.setItem(VGEN_HIST_KEY, JSON.stringify(list));
+    return list;
+  } catch { return []; }
 }
 function vgenHistorySave(entry) {
   const list = vgenHistoryLoad();
@@ -2092,16 +2105,11 @@ function vgenHistoryRender() {
   const strip = document.getElementById('vgen-history-strip');
   if (!strip) return;
   let list = vgenHistoryLoad();
-  // Разовая миграция: старые записи без projectId (до появления фильтра по проекту)
-  // привязываем к текущему активному проекту, чтобы не потерять их из виду.
-  let migrated = false;
-  if (vActiveProject) {
-    list.forEach(item => { if (!item.projectId) { item.projectId = vActiveProject; migrated = true; } });
-    if (migrated) localStorage.setItem(VGEN_HIST_KEY, JSON.stringify(list));
-  }
-  // Фильтр: только видео этого проекта, и если выбран под-проект (товар/услуга) — только его
-  list = list.filter(item => item.projectId === vActiveProject);
-  if (vActiveCardId) list = list.filter(item => item.cardId === vActiveCardId);
+  // Старые записи (сделаны до появления фильтра по проекту) не имеют projectId/cardId —
+  // показываем их везде, а не гадаем, какому проекту их приписать: неверная догадка
+  // безвозвратно прячет реальные видео из истории, а показ "лишний раз" — не страшно.
+  list = list.filter(item => !item.projectId || item.projectId === vActiveProject);
+  if (vActiveCardId) list = list.filter(item => !item.cardId || item.cardId === vActiveCardId);
   if (!list.length) { strip.innerHTML = ''; return; }
   strip.innerHTML = list.map((item) => `
     <div class="vgen-hist-item" onclick="vgenHistoryRestore('${item.id}')" title="${(item.prompt||'').replace(/"/g,'&quot;').slice(0,120)}">
