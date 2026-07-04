@@ -972,7 +972,10 @@
                   <div style="padding:10px 14px 0;border-bottom:1px solid var(--border);">
                     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
                       <span style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;">Model</span>
-                      <button onclick="vgenReset()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:12px;font-weight:600;padding:2px 6px;" title="Сброс">↺ Reset</button>
+                      <div>
+                        <button onclick="wbOpen()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:12px;font-weight:600;padding:2px 6px;" title="Товары проекта (импорт с Wildberries)">🛒 Товары</button>
+                        <button onclick="vgenReset()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:12px;font-weight:600;padding:2px 6px;" title="Сброс">↺ Reset</button>
+                      </div>
                     </div>
                     <div style="display:flex;gap:0;background:var(--bg);border-radius:8px;padding:3px;margin-bottom:10px;border:1px solid var(--border);">
                       <button class="vgen-model-tab active" data-model="seedance" onclick="vgenSelectModel('seedance',this)">🌱 Seedance</button>
@@ -1047,6 +1050,9 @@
                         <span id="vgen-last-label">last_frame_image</span>
                         <div style="display:flex;gap:6px;align-items:center;">
                           <button onclick="vrefPickOpen('last')" style="background:none;border:1px solid var(--border);border-radius:5px;color:var(--text-muted);font-size:11px;cursor:pointer;padding:2px 8px;">📁 Библ.</button>
+                          <button onclick="vgenOutroApply()" id="vgen-outro-btn" style="background:none;border:1px solid rgba(108,99,255,0.4);border-radius:5px;color:var(--accent);font-size:11px;cursor:pointer;padding:2px 8px;" title="Применить сохранённое аутро (лого + призыв подписаться/перейти на маркетплейс) как последний кадр. Если ещё не сохранено — предложит загрузить.">🏷 Аутро</button>
+                          <button onclick="document.getElementById('vgen-outro-input').click()" style="background:none;border:none;color:var(--text-muted);font-size:11px;cursor:pointer;padding:2px 4px;" title="Загрузить/заменить сохранённое аутро">✎</button>
+                          <input type="file" id="vgen-outro-input" accept="image/*" style="display:none;" onchange="vgenOutroUpload(event)">
                           <button onclick="vgenClearImage('last')" style="background:none;border:none;color:#ef4444;font-size:11px;cursor:pointer;display:none;" id="vgen-clear-last">✕</button>
                         </div>
                       </label>
@@ -2452,6 +2458,138 @@ async function vrefKieProcess(imgId, type) {
   }
 }
 
+// ── Товары проекта (импорт карточки с Wildberries) ──
+let wbProducts = [];
+
+function wbEsc(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+async function wbOpen() {
+  const m = document.getElementById('modal-wb');
+  if (m) m.style.display = 'flex';
+  await wbLoad();
+}
+function wbClose() {
+  const m = document.getElementById('modal-wb');
+  if (m) m.style.display = 'none';
+}
+
+async function wbLoad() {
+  const empty = document.getElementById('wb-empty');
+  if (!vActiveProject) {
+    wbProducts = [];
+    if (empty) { empty.style.display = 'block'; empty.querySelector('.wb-empty-text')?.remove(); empty.innerHTML = '<div style="font-size:32px;margin-bottom:8px;opacity:0.3;">🛒</div>Сначала выберите или создайте проект слева'; }
+    wbRender();
+    return;
+  }
+  try {
+    const r = await fetch('/api/wb/products?projectId=' + encodeURIComponent(vActiveProject));
+    const d = await r.json();
+    wbProducts = d.ok ? d.products : [];
+  } catch { wbProducts = []; }
+  wbRender();
+}
+
+function wbRender() {
+  const grid = document.getElementById('wb-grid');
+  const empty = document.getElementById('wb-empty');
+  if (!grid) return;
+  grid.querySelectorAll('.wb-card').forEach(c => c.remove());
+  if (empty) empty.style.display = wbProducts.length ? 'none' : 'block';
+  wbProducts.forEach(p => {
+    const div = document.createElement('div');
+    div.className = 'wb-card';
+    div.style.cssText = 'border:1px solid var(--border);border-radius:8px;overflow:hidden;cursor:pointer;transition:border-color 0.15s;position:relative;background:var(--bg);';
+    div.addEventListener('mouseover', () => div.style.borderColor = 'var(--accent)');
+    div.addEventListener('mouseout', () => div.style.borderColor = 'var(--border)');
+    div.innerHTML = `
+      <img src="${p.images?.[0] || ''}" style="width:100%;height:110px;object-fit:cover;display:block;background:#1a1c2a;" loading="lazy">
+      <div style="padding:8px;">
+        <div style="font-size:11px;font-weight:600;color:var(--text);line-height:1.3;max-height:2.6em;overflow:hidden;">${wbEsc(p.name || 'Без названия')}</div>
+        <div style="font-size:10px;color:var(--text-muted);margin-top:3px;">арт. ${p.nmId}</div>
+      </div>
+      <button class="wb-del-btn" style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,0.6);border:none;color:#fff;border-radius:5px;width:20px;height:20px;font-size:12px;cursor:pointer;line-height:1;">✕</button>`;
+    div.querySelector('.wb-del-btn').addEventListener('click', (e) => { e.stopPropagation(); wbDelete(p.id); });
+    div.addEventListener('click', () => wbApply(p));
+    grid.appendChild(div);
+  });
+}
+
+async function wbAddByLink() {
+  const input = document.getElementById('wb-link-input');
+  const status = document.getElementById('wb-add-status');
+  const url = input?.value.trim();
+  if (!url) return;
+  if (!vActiveProject) { if (status) status.textContent = 'Сначала выберите проект слева'; return; }
+  const btn = document.getElementById('wb-add-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Загружаю...'; }
+  if (status) status.textContent = '';
+  try {
+    const r = await fetch('/api/wb/products', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projectId: vActiveProject, url })
+    });
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error);
+    input.value = '';
+    await wbLoad();
+  } catch (e) {
+    if (status) status.textContent = '✗ ' + e.message;
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '+ Добавить'; }
+  }
+}
+
+function wbDelete(id) {
+  fetch('/api/wb/products/' + id, { method: 'DELETE' }).then(() => wbLoad());
+}
+
+function wbApply(p) {
+  if (p.images?.[0]) vgenSetImage('first', p.images[0]);
+  // Остальные фото товара кладём в библиотеку проекта — можно быстро выбрать как last_frame
+  if (p.images?.length > 1) {
+    const lib = vrefGetImages();
+    const existing = new Set(lib.map(i => i.data));
+    p.images.slice(1).forEach((url, i) => {
+      if (!existing.has(url)) lib.unshift({ id: Date.now() + Math.random() + i, name: p.name + ' #' + (i + 2), data: url, added: Date.now(), badge: 'wb', sourceId: p.id });
+    });
+    vrefSaveImages(lib);
+  }
+  const promptEl = document.getElementById('vgen-prompt');
+  if (promptEl) {
+    const chars = (p.characteristics || []).map(c => `${c.name}: ${c.value}`).join('; ');
+    const desc = (p.description || '').slice(0, 500);
+    const tag = `\n\n[PRODUCT REFERENCE: ${p.name}. ${desc}${chars ? ' Характеристики: ' + chars : ''}]`;
+    const existingVal = promptEl.value.trim();
+    promptEl.value = existingVal + tag;
+    promptEl.style.borderColor = 'var(--accent)';
+    setTimeout(() => promptEl.style.borderColor = 'var(--border)', 2000);
+  }
+  wbClose();
+}
+
+// ── Аутро (лого + призыв подписаться/перейти на маркетплейс) — сохраняется один раз, переиспользуется как last_frame ──
+function vgenOutroApply() {
+  const saved = localStorage.getItem('vgen_outro_image');
+  if (saved) {
+    vgenSetImage('last', saved);
+  } else {
+    document.getElementById('vgen-outro-input')?.click();
+  }
+}
+function vgenOutroUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    localStorage.setItem('vgen_outro_image', reader.result);
+    vgenSetImage('last', reader.result);
+  };
+  reader.readAsDataURL(file);
+  event.target.value = '';
+}
+
 // Upload image to server (base64 → URL). Если это уже http(s)-ссылка
 // (картинка из библиотеки после upscale/multiangle) — отправлять не нужно.
 let vgenLastUploadError = '';
@@ -3775,6 +3913,37 @@ document.addEventListener('DOMContentLoaded', () => {
     <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
       <span id="vref-count" style="font-size:12px;color:var(--text-muted);">0 изображений</span>
       <button onclick="vrefClose()" style="background:var(--card-bg);border:1px solid var(--border);border-radius:7px;padding:7px 16px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer;">Закрыть</button>
+    </div>
+  </div>
+</div>
+
+<!-- WB products modal -->
+<div id="modal-wb" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:3000;align-items:center;justify-content:center;">
+  <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:16px;width:700px;max-width:95vw;max-height:85vh;display:flex;flex-direction:column;overflow:hidden;">
+    <!-- Header -->
+    <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+      <div>
+        <div style="font-size:15px;font-weight:700;color:var(--text);">🛒 Товары проекта</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:2px;">Импорт карточки с Wildberries: фото, описание, характеристики — сохраняются в проекте</div>
+      </div>
+      <button onclick="wbClose()" style="background:none;border:none;color:var(--text-muted);font-size:20px;cursor:pointer;line-height:1;">×</button>
+    </div>
+    <!-- Add by link -->
+    <div style="padding:12px 20px;border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:center;">
+      <input id="wb-link-input" placeholder="Ссылка на товар wildberries.ru/catalog/.../detail.aspx или артикул" style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:7px;color:var(--text);padding:8px 12px;font-size:12px;outline:none;" onkeydown="if(event.key==='Enter')wbAddByLink()">
+      <button id="wb-add-btn" onclick="wbAddByLink()" style="background:var(--accent);color:#fff;border:none;border-radius:7px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;">+ Добавить</button>
+    </div>
+    <div id="wb-add-status" style="padding:6px 20px 0;font-size:12px;color:#ef4444;"></div>
+    <!-- Grid -->
+    <div id="wb-grid" style="flex:1;overflow-y:auto;padding:16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;">
+      <div id="wb-empty" style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text-muted);font-size:13px;">
+        <div style="font-size:32px;margin-bottom:8px;opacity:0.3;">🛒</div>
+        Нет товаров. Вставьте ссылку на карточку Wildberries выше.
+      </div>
+    </div>
+    <!-- Footer -->
+    <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;">
+      <button onclick="wbClose()" style="background:var(--card-bg);border:1px solid var(--border);border-radius:7px;padding:7px 16px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer;">Закрыть</button>
     </div>
   </div>
 </div>

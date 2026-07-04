@@ -338,6 +338,85 @@ app.post('/api/kie/multiangle-image', async (req, res) => {
   }
 });
 
+// ── Wildberries: импорт карточки товара по ссылке (для видео-генерации) ──
+const WB_PRODUCTS_FILE = path.join(__dirname, 'data', 'wb-products.json');
+function wbProductsRead() {
+  try { return JSON.parse(fs.readFileSync(WB_PRODUCTS_FILE, 'utf8')); } catch { return []; }
+}
+function wbProductsWrite(list) {
+  fs.mkdirSync(path.dirname(WB_PRODUCTS_FILE), { recursive: true });
+  fs.writeFileSync(WB_PRODUCTS_FILE, JSON.stringify(list, null, 2));
+}
+function wbExtractNmId(input) {
+  const s = String(input || '').trim();
+  if (/^\d+$/.test(s)) return parseInt(s, 10);
+  const m = s.match(/(?:catalog\/|[?&]nm=)(\d+)/);
+  return m ? parseInt(m[1], 10) : null;
+}
+// WB шардирует товары по basket-NN.wbbasket.ru без официального способа узнать номер
+// по nmId — пробуем хосты параллельно и берём первый, где реально есть карточка.
+async function wbResolveBasket(nmId) {
+  const vol = Math.floor(nmId / 100000);
+  const part = Math.floor(nmId / 1000);
+  const results = await Promise.allSettled(
+    Array.from({ length: 30 }, (_, i) => {
+      const base = `https://basket-${String(i + 1).padStart(2, '0')}.wbbasket.ru/vol${vol}/part${part}/${nmId}`;
+      return fetch(base + '/info/ru/card.json', { method: 'HEAD' }).then(r => (r.ok ? base : Promise.reject()));
+    })
+  );
+  const found = results.find(r => r.status === 'fulfilled');
+  if (!found) throw new Error('Не удалось найти карточку товара на CDN Wildberries (проверьте ссылку или товар снят с продажи)');
+  return found.value;
+}
+async function wbFetchCard(url) {
+  const nmId = wbExtractNmId(url);
+  if (!nmId) throw new Error('Не удалось распознать артикул в ссылке');
+  const base = await wbResolveBasket(nmId);
+  const cardRes = await fetch(base + '/info/ru/card.json');
+  if (!cardRes.ok) throw new Error('Карточка товара не найдена (HTTP ' + cardRes.status + ')');
+  const card = await cardRes.json();
+  const photoCount = card?.media?.photo_count || 0;
+  const images = [];
+  for (let i = 1; i <= Math.min(photoCount, 10); i++) images.push(`${base}/images/big/${i}.webp`);
+  return {
+    nmId,
+    name: card.imt_name || '',
+    description: card.description || '',
+    characteristics: (card.options || []).map(o => ({ name: o.name, value: o.value })),
+    vendorCode: card.vendor_code || '',
+    category: card.subj_name || '',
+    images,
+    url: `https://www.wildberries.ru/catalog/${nmId}/detail.aspx`,
+  };
+}
+
+app.get('/api/wb/products', (req, res) => {
+  const { projectId } = req.query;
+  const all = wbProductsRead();
+  res.json({ ok: true, products: projectId ? all.filter(p => p.projectId === projectId) : all });
+});
+
+app.post('/api/wb/products', async (req, res) => {
+  try {
+    const { projectId, url } = req.body || {};
+    if (!projectId) return res.json({ ok: false, error: 'projectId обязателен' });
+    if (!url) return res.json({ ok: false, error: 'Ссылка не передана' });
+    const card = await wbFetchCard(url);
+    const entry = { id: 'wb_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7), projectId, addedAt: new Date().toISOString(), ...card };
+    const list = wbProductsRead();
+    list.unshift(entry);
+    wbProductsWrite(list);
+    res.json({ ok: true, product: entry });
+  } catch (e) {
+    res.json({ ok: false, error: e.message });
+  }
+});
+
+app.delete('/api/wb/products/:id', (req, res) => {
+  wbProductsWrite(wbProductsRead().filter(p => p.id !== req.params.id));
+  res.json({ ok: true });
+});
+
 // ── Enhance prompt via Claude (Anthropic direct or OpenRouter) ──
 
 function buildTimeMarkers(duration) {
