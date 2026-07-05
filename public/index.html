@@ -1079,11 +1079,6 @@
                       </div>
                     </div>
 
-                    <!-- Мультиракурс из загруженных референсов -->
-                    <button onclick="vgenMultiangleFromRefs()" id="vgen-multiangle-refs-btn" style="width:100%;background:rgba(5,150,105,0.12);border:1px solid rgba(5,150,105,0.4);border-radius:7px;padding:8px;font-size:12px;font-weight:700;color:#059669;cursor:pointer;" title="Собрать один референс-лист (4 ракурса) из загруженных First/Last frame в 4K (gpt-image-2, с откатом на 1536×1024 если модель недоступна) и сохранить в библиотеку проекта">
-                      📐✨ Мультиракурс 4K из референсов → в библиотеку
-                    </button>
-
                     <!-- Параметры -->
                     <div style="display:flex;flex-direction:column;gap:10px;">
                       <div>
@@ -4280,6 +4275,9 @@ document.addEventListener('DOMContentLoaded', () => {
         <div style="font-size:12px;color:var(--text-muted);margin-top:2px;" id="vref-proj-label"></div>
       </div>
       <div style="display:flex;gap:8px;align-items:center;">
+        <button onclick="vgenMultiangleFromRefs()" id="vgen-multiangle-refs-btn" style="background:rgba(5,150,105,0.12);border:1px solid rgba(5,150,105,0.4);border-radius:7px;padding:7px 14px;font-size:12px;font-weight:700;color:#059669;cursor:pointer;white-space:nowrap;" title="Собрать один референс-лист (4 ракурса) из загруженных First/Last frame в 4K (gpt-image-2, с откатом на 1536×1024 если модель недоступна) и сохранить в эту библиотеку">
+          📐✨ Мультиракурс 4K
+        </button>
         <button onclick="document.getElementById('vref-upload-input').click()" style="background:var(--accent);color:#fff;border:none;border-radius:7px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;">+ Добавить</button>
         <input type="file" id="vref-upload-input" accept="image/*" multiple style="display:none;" onchange="vrefUpload(event)">
         <button onclick="vrefClose()" style="background:none;border:none;color:var(--text-muted);font-size:20px;cursor:pointer;line-height:1;">×</button>
