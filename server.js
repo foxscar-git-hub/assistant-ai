@@ -1003,6 +1003,8 @@ async function handleOmni16Status(req, res) {
       job.phase = 'clip2';
       job.clip1Path = clip1Path;
       job.clip2TaskId = clip2TaskId;
+      job.clip1Credits = task.creditsConsumed || 0;
+      job.clip1CostTime = task.costTime || 0;
       return res.json({ status: 'pending', stage: 'Часть 1 готова, запускаю часть 2 из 2...' });
     }
 
@@ -1029,9 +1031,11 @@ async function handleOmni16Status(req, res) {
       try { fs.unlinkSync(clip2Path); } catch {}
 
       const finalUrl = '/videogen-output/' + compoundId + '.mp4';
+      const totalCredits = (job.clip1Credits || 0) + (task.creditsConsumed || 0);
+      const totalCostTime = (job.clip1CostTime || 0) + (task.costTime || 0);
       omni16Jobs.delete(compoundId);
-      localLogUpdate(compoundId, { state: 'success', resultJson: JSON.stringify({ resultUrls: [finalUrl] }) });
-      return res.json({ status: 'success', url: finalUrl });
+      localLogUpdate(compoundId, { state: 'success', resultJson: JSON.stringify({ resultUrls: [finalUrl] }), creditsConsumed: totalCredits });
+      return res.json({ status: 'success', url: finalUrl, credits: totalCredits, costTime: totalCostTime });
     }
 
     res.json({ status: 'error', error: 'Неизвестная фаза задачи' });
