@@ -974,6 +974,7 @@
                       <span style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;">Model</span>
                       <div>
                         <button onclick="wbOpen()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:12px;font-weight:600;padding:2px 6px;" title="Товары проекта (импорт с Wildberries)">🛒 Товары</button>
+                        <button onclick="vgenClearAllHistory()" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:12px;font-weight:600;padding:2px 6px;" title="Удалить всю историю генераций (необратимо)">🗑 История</button>
                         <button onclick="vgenReset()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:12px;font-weight:600;padding:2px 6px;" title="Сброс">↺ Reset</button>
                       </div>
                     </div>
@@ -2464,6 +2465,16 @@ function vgenReset() {
   const firstQual = document.querySelector('#vgen-submodel-row input[name="vgen-qual"]');
   if (firstQual) { firstQual.checked = true; firstQual.closest('.vgen-ratio-btn')?.click(); }
   vgenClearOutput();
+}
+
+async function vgenClearAllHistory() {
+  if (!confirm('Удалить ВСЮ историю генераций во всех проектах — и в браузере, и лог задач на сервере? Это необратимо, видео восстановить не получится.')) return;
+  localStorage.removeItem(VGEN_HIST_KEY);
+  vgenHistoryRender();
+  try {
+    await fetch('/api/videogen/logs', { method: 'DELETE' });
+    if (document.getElementById('vtab-logs')?.classList.contains('active')) kieLogsLoad();
+  } catch {}
 }
 
 function vgenClearOutput() {

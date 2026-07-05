@@ -856,6 +856,17 @@ app.delete('/api/videogen/logs/:taskId', (req, res) => {
   res.json({ ok: true });
 });
 
+// ── Очистить весь локальный лог генераций (все проекты) ──
+app.delete('/api/videogen/logs', (req, res) => {
+  try {
+    fs.mkdirSync(path.dirname(LOCAL_LOGS_FILE), { recursive: true });
+    fs.writeFileSync(LOCAL_LOGS_FILE, '[]');
+    res.json({ ok: true });
+  } catch (e) {
+    res.json({ ok: false, error: e.message });
+  }
+});
+
 // ── Omni 16 сек = 2×8с клипа + бесшовная склейка ──
 // Первый кадр второй части — последний кадр первой (для бесшовного перехода).
 // Промпт от /api/enhance-prompt при duration=16 приходит с разделителем ===PART2===.
