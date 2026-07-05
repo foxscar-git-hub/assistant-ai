@@ -2133,9 +2133,13 @@ function vgenHistorySave(entry) {
   vgenHistoryRender();
 }
 function vgenHistoryDelete(id) {
-  const list = vgenHistoryLoad().filter(item => item.id !== id);
+  const all = vgenHistoryLoad();
+  const item = all.find(i => i.id === id);
+  const list = all.filter(i => i.id !== id);
   localStorage.setItem(VGEN_HIST_KEY, JSON.stringify(list));
   vgenHistoryRender();
+  // Удаляем и серверную запись задачи (лог KIE) — не только из локальной истории браузера
+  if (item?.taskId) fetch('/api/videogen/logs/' + item.taskId, { method: 'DELETE' }).catch(() => {});
 }
 
 function vgenHistoryRender() {
@@ -2389,6 +2393,7 @@ async function vgenGenerateIdea() {
       method: 'POST', headers,
       body: JSON.stringify({ model, format, duration: dur, productName }),
     });
+    if (!r.ok) throw new Error('Сервер вернул ошибку (HTTP ' + r.status + ') — попробуйте ещё раз');
     const d = await r.json();
     if (!d.ok || !d.idea) throw new Error(d.error || 'Не удалось придумать идею');
     promptEl.value = d.idea;
@@ -2816,7 +2821,7 @@ function vgenAnimateProgress(pct) {
   if (bar) bar.style.width = Math.min(pct, 95) + '%';
 }
 
-function vgenShowResult(url, credits, costTime) {
+function vgenShowResult(url, credits, costTime, taskId) {
   // Save to history — привязываем к текущему проекту и (если выбран) под-проекту товара/услуги
   if (url && vgenState.lastParams) {
     vgenHistorySave({
@@ -2824,6 +2829,7 @@ function vgenShowResult(url, credits, costTime) {
       projectId: vActiveProject,
       cardId: vActiveCardId || null,
       url,
+      taskId: taskId || null,
       credits: credits || null,
       costTime: costTime || null,
       createdAt: new Date().toISOString(),
@@ -2878,7 +2884,7 @@ async function vgenPoll(taskId, startTime, attempt) {
     const elapsed = Math.round((Date.now() - startTime) / 1000);
     if (d.status === 'success') {
       sessionStorage.removeItem('vgen_active_task');
-      vgenShowResult(d.url, d.credits, d.costTime);
+      vgenShowResult(d.url, d.credits, d.costTime, taskId);
       const btn = document.getElementById('vgen-run-btn');
       if (btn) { btn.disabled = false; btn.innerHTML = '▶ Run'; }
       return;

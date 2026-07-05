@@ -47,6 +47,12 @@ function localLogUpdate(taskId, patch) {
     if (idx !== -1) { Object.assign(logs[idx], patch); fs.writeFileSync(LOCAL_LOGS_FILE, JSON.stringify(logs, null, 2)); }
   } catch {}
 }
+function localLogDelete(taskId) {
+  try {
+    const logs = localLogsRead().filter(l => l.taskId !== taskId);
+    fs.writeFileSync(LOCAL_LOGS_FILE, JSON.stringify(logs, null, 2));
+  } catch {}
+}
 
 app.use(express.json({ limit: '20mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
@@ -797,6 +803,12 @@ app.get('/api/videogen/status/:taskId', async (req, res) => {
   } catch (e) {
     res.json({ status: 'error', error: e.message });
   }
+});
+
+// ── Удалить запись задачи из локального лога (KIE запись видео не хранит — только на своём CDN) ──
+app.delete('/api/videogen/logs/:taskId', (req, res) => {
+  localLogDelete(req.params.taskId);
+  res.json({ ok: true });
 });
 
 // ── Video Cutting endpoints ──
