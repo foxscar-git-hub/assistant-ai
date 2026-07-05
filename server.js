@@ -451,6 +451,18 @@ function buildTimeMarkers(duration) {
   return `0–4s: [opening], 4–8s: [build-up], 8–13s: [climax], 13–${d}s: [resolution/payoff]`;
 }
 
+// Голос за кадром всегда стартует на 2с и заканчивается за 1-2с до конца ролика;
+// длину текста считаем в словах под этот тайминг (естественный темп русской речи ~2-2.6 слов/с),
+// чтобы модель не писала реплику длиннее или короче отведённого окна.
+function omniVoiceoverRule(segLen) {
+  const start = 2;
+  const end = Math.max(start + 1, segLen - 1.5);
+  const speechSec = end - start;
+  const wordsLo = Math.max(1, Math.round(speechSec * 2.0));
+  const wordsHi = Math.max(wordsLo, Math.round(speechSec * 2.6));
+  return `AUDIO/VOICEOVER: voiceover MUST be in Russian, starting at exactly ${start}s and ending by ${end.toFixed(1)}s (1-2s before the ${segLen}s clip ends) — write it as "Голос за кадром: «...»" directly in the prompt. Keep it to ${wordsLo}-${wordsHi} Russian words total so it fits naturally at conversational pace inside that ${speechSec.toFixed(1)}s window — writing more will make it get cut off mid-sentence. Background music/SFX describe in English.`;
+}
+
 const ENHANCE_SYSTEM = {
   seedance: (duration, format) => `You are an expert video prompt engineer for Seedance 2.0 (ByteDance).
 The video is ${duration} seconds long. Format: ${format}.
@@ -487,24 +499,56 @@ Rules:
 - Describe visual style, color palette, lighting explicitly
 - Output ONLY the prompt text in English. No explanations.`,
 
-  omni: (duration, format) => `You are an expert video prompt engineer for Google Gemini Omni video.
+  omni: (duration, format) => {
+    const formatNote = format === 'viral' ? 'eye-catching hook, high visual contrast, trending aesthetic' :
+      format === 'cartoon' ? 'animation style, stylized visuals, bright palette' :
+      format === 'documentary' ? 'naturalistic realism, observational perspective' :
+      format === 'ad' ? 'product spotlight, clean composition, aspirational' :
+      format === 'ugc' ? 'raw handheld selfie-style UGC review/unboxing, creator talking directly to camera the whole time, genuine excited reaction, casual authentic home setting, imperfect natural lighting, NOT cinematic or polished; end on an engaging call-to-action' :
+      'cinematic depth, professional lighting';
+    const ugcVoiceNote = format === 'ugc' ? ' For UGC: write the creator\'s spoken lines as natural casual speech (not scripted-sounding), including the closing call-to-action line.' : '';
+
+    if (Number(duration) === 16) {
+      // 16с = два отдельных Omni-запроса по 8с, склеенные на сервере; первый кадр
+      // части 2 = последний кадр части 1 (см. /api/videogen/omni16) — прошиваем это
+      // в промпт как требование визуальной непрерывности между частями.
+      return `You are an expert video prompt engineer for Google Gemini Omni video.
+This is a 16-second video assembled from TWO separately generated 8-second Omni clips that get stitched together automatically — the first frame of Part 2 is set to the actual last frame of Part 1, so the cut must feel invisible: same pose, same environment, same lighting, action continuing exactly where Part 1 left off.
+Format: ${format}.
+
+Output EXACTLY two prompts separated by a line containing only: ===PART2===
+Nothing else on that separator line, and that exact string must not appear anywhere else in the output.
+
+Part 1 (seconds 0–8 of the story):
+- Describe scene opening with rich visual detail: colors, textures, exact lighting conditions
+- State camera angle and movement explicitly at the start
+- Add time-based progression for this 8s segment: ${buildTimeMarkers(8)}
+- End on a clear, precisely describable pose/moment — this exact frame becomes the opening of Part 2
+- ${omniVoiceoverRule(8)}${ugcVoiceNote}
+
+Part 2 (seconds 8–16 of the story, continues seamlessly from Part 1's ending frame):
+- Open by re-stating the continuation frame explicitly (same subject pose, same framing, same lighting Part 1 ended on) so the model anchors to it, then progress the story forward with new action or a reveal — do not repeat Part 1's beats
+- Add time-based progression treating this as its own 0–8s segment: ${buildTimeMarkers(8)}
+- ${omniVoiceoverRule(8)}${ugcVoiceNote}
+- End with a clear payoff / call-to-action appropriate for format "${format}"
+
+For format "${format}" (applies to both parts): ${formatNote}
+- English text overlays allowed if they add value
+- Output ONLY the two prompts and the ===PART2=== separator line, in English (except Russian voiceover lines). No explanations, no "Part 1:"/"Part 2:" labels.`;
+    }
+
+    return `You are an expert video prompt engineer for Google Gemini Omni video.
 The video is ${duration} seconds long. Format: ${format}.
 Rules:
 - Describe scene opening with rich visual detail: colors, textures, exact lighting conditions
 - State camera angle and movement explicitly at the start
 - Add time-based progression for this ${duration}s clip: ${buildTimeMarkers(duration)}
-- For format "${format}": ${
-    format === 'viral' ? 'eye-catching hook, high visual contrast, trending aesthetic' :
-    format === 'cartoon' ? 'animation style, stylized visuals, bright palette' :
-    format === 'documentary' ? 'naturalistic realism, observational perspective' :
-    format === 'ad' ? 'product spotlight, clean composition, aspirational' :
-    format === 'ugc' ? 'raw handheld selfie-style UGC review/unboxing, creator talking directly to camera the whole time, genuine excited reaction, casual authentic home setting, imperfect natural lighting, NOT cinematic or polished; end on an engaging call-to-action' :
-    'cinematic depth, professional lighting'
-  }
-- AUDIO/VOICEOVER: The voiceover and any spoken dialogue MUST be in Russian language. Describe voiceover text in Russian directly in the prompt (e.g. "Голос за кадром: «текст на русском»"). Background music and sound effects describe in English. ${format === 'ugc' ? 'For UGC: write the creator\'s spoken lines in Russian as natural casual speech (not scripted-sounding), including the closing call-to-action line.' : ''}
+- For format "${format}": ${formatNote}
+- ${omniVoiceoverRule(Number(duration) || 8)}${ugcVoiceNote}
 - English text overlays are allowed if they add value
 - Describe mood, emotional tone, atmosphere
-- Output ONLY the prompt text in English (except Russian voiceover lines). No explanations.`,
+- Output ONLY the prompt text in English (except Russian voiceover lines). No explanations.`;
+  },
 };
 
 const FORMAT_NAMES = {
@@ -785,6 +829,7 @@ app.post('/api/videogen', async (req, res) => {
 
 // ── KIE: статус задачи ──
 app.get('/api/videogen/status/:taskId', async (req, res) => {
+  if (req.params.taskId.startsWith('omni16_')) return handleOmni16Status(req, res);
   try {
     const reqKey = req.headers['x-kie-key'] || kieKey();
     const data = await kieGet('/jobs/recordInfo?taskId=' + req.params.taskId, reqKey);
@@ -810,6 +855,160 @@ app.delete('/api/videogen/logs/:taskId', (req, res) => {
   localLogDelete(req.params.taskId);
   res.json({ ok: true });
 });
+
+// ── Omni 16 сек = 2×8с клипа + бесшовная склейка ──
+// Первый кадр второй части — последний кадр первой (для бесшовного перехода).
+// Промпт от /api/enhance-prompt при duration=16 приходит с разделителем ===PART2===.
+const OMNI16_DIR = path.join(__dirname, 'data', 'videogen-output');
+if (!fs.existsSync(OMNI16_DIR)) fs.mkdirSync(OMNI16_DIR, { recursive: true });
+app.use('/videogen-output', express.static(OMNI16_DIR));
+
+const omni16Jobs = new Map(); // compoundId -> { phase, clip1TaskId, clip2TaskId, partB, refUrls, ... }
+
+async function downloadToFile(url, destPath) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error('Не удалось скачать файл: HTTP ' + r.status);
+  fs.writeFileSync(destPath, Buffer.from(await r.arrayBuffer()));
+}
+
+async function extractLastFrame(videoPath, outImagePath) {
+  // Берём кадр в последних ~2с ролика, а не буквально самый последний —
+  // некоторые энкодеры обрезают хвостовой GOP при seek вплотную к EOF
+  await ffmpegExec(['-y', '-sseof', '-2', '-i', videoPath, '-update', '1', '-q:v', '2', '-frames:v', '1', outImagePath]);
+}
+
+async function concatVideos(clip1Path, clip2Path, outPath) {
+  const listPath = outPath + '.list.txt';
+  fs.writeFileSync(listPath, `file '${clip1Path}'\nfile '${clip2Path}'\n`);
+  try {
+    await ffmpegExec(['-y', '-f', 'concat', '-safe', '0', '-i', listPath, '-c', 'copy', outPath]);
+  } catch {
+    // Стрим-копия не сработала (разные параметры кодека между клипами) — перекодируем
+    await ffmpegExec(['-y', '-f', 'concat', '-safe', '0', '-i', listPath, '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-c:a', 'aac', outPath]);
+  } finally {
+    try { fs.unlinkSync(listPath); } catch {}
+  }
+}
+
+async function createOmniClipTask(prompt, imageUrls, aspectRatio, resolution, reqKey) {
+  const ar = ['16:9', '9:16'].includes(aspectRatio) ? aspectRatio : '16:9';
+  const resolNorm = ['720p', '1080p', '4k'].includes((resolution || '720p').toLowerCase()) ? resolution.toLowerCase() : '720p';
+  const input = { prompt, resolution: resolNorm, aspect_ratio: ar, duration: '8' };
+  if (imageUrls?.length) input.image_urls = imageUrls.slice(0, 7);
+  const data = await kiePost('/jobs/createTask', { model: 'gemini-omni-video', input }, reqKey);
+  if (data.code !== 200 && !data.data?.taskId) throw new Error(data.msg || JSON.stringify(data));
+  return data.data?.taskId || data.taskId;
+}
+
+app.post('/api/videogen/omni16', async (req, res) => {
+  try {
+    const reqKey = req.headers['x-kie-key'] || kieKey();
+    const { prompt, resolution = '720p', aspect_ratio = '16:9', image_url, end_image_url, image_urls } = req.body;
+    if (!prompt) return res.json({ ok: false, error: 'prompt обязателен' });
+    if (!reqKey) return res.json({ ok: false, error: 'KIE API ключ не задан' });
+
+    const [partA, partB] = prompt.includes('===PART2===')
+      ? prompt.split('===PART2===').map(s => s.trim())
+      : [prompt.trim(), prompt.trim()];
+
+    const refUrls = [...(Array.isArray(image_urls) ? image_urls : []),
+                      ...(image_url ? [image_url] : []),
+                      ...(end_image_url ? [end_image_url] : [])].filter(Boolean);
+
+    const clip1TaskId = await createOmniClipTask(partA, refUrls, aspect_ratio, resolution, reqKey);
+
+    const compoundId = 'omni16_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+    omni16Jobs.set(compoundId, { phase: 'clip1', clip1TaskId, partB, refUrls, aspect_ratio, resolution, reqKey });
+
+    localLogAppend({
+      taskId: compoundId,
+      model: 'gemini-omni-video (16s · 2×8с склейка)',
+      state: 'processing',
+      createdAt: new Date().toISOString(),
+      input: JSON.stringify({ prompt, resolution, aspect_ratio, duration: '16' }),
+      resultJson: null,
+    });
+
+    res.json({ ok: true, taskId: compoundId });
+  } catch (e) {
+    res.json({ ok: false, error: e.message });
+  }
+});
+
+async function handleOmni16Status(req, res) {
+  const compoundId = req.params.taskId;
+  const job = omni16Jobs.get(compoundId);
+  if (!job) return res.json({ status: 'error', error: 'Задача не найдена (сервер перезапускался, состояние не сохраняется)' });
+
+  try {
+    if (job.phase === 'clip1') {
+      const data = await kieGet('/jobs/recordInfo?taskId=' + job.clip1TaskId, job.reqKey);
+      const task = data.data || data;
+      if (task.state === 'fail') {
+        omni16Jobs.delete(compoundId);
+        localLogUpdate(compoundId, { state: 'fail', failMsg: task.failMsg });
+        return res.json({ status: 'failed', error: 'Часть 1 из 2: ' + (task.failMsg || 'ошибка генерации') });
+      }
+      if (task.state !== 'success') return res.json({ status: 'pending', stage: 'Генерация части 1 из 2...' });
+
+      let clip1Url = '';
+      try { clip1Url = JSON.parse(task.resultJson || '{}').resultUrls?.[0] || ''; } catch {}
+      if (!clip1Url) throw new Error('Часть 1 завершилась без результата');
+
+      const clip1Path = path.join(OMNI16_DIR, compoundId + '_part1.mp4');
+      await downloadToFile(clip1Url, clip1Path);
+      const framePath = path.join(OMNI16_DIR, compoundId + '_lastframe.jpg');
+      await extractLastFrame(clip1Path, framePath);
+      const frameKieUrl = await kieUploadBase64(
+        'data:image/jpeg;base64,' + fs.readFileSync(framePath).toString('base64'),
+        job.reqKey, 'continuity.jpg'
+      );
+      try { fs.unlinkSync(framePath); } catch {}
+
+      // Кадр-продолжение первым (задаёт стартовый кадр части 2), затем исходные
+      // референсы товара — чтобы часть 2 сохранила его внешний вид
+      const part2Refs = [frameKieUrl, ...job.refUrls].slice(0, 7);
+      const clip2TaskId = await createOmniClipTask(job.partB, part2Refs, job.aspect_ratio, job.resolution, job.reqKey);
+
+      job.phase = 'clip2';
+      job.clip1Path = clip1Path;
+      job.clip2TaskId = clip2TaskId;
+      return res.json({ status: 'pending', stage: 'Часть 1 готова, запускаю часть 2 из 2...' });
+    }
+
+    if (job.phase === 'clip2') {
+      const data = await kieGet('/jobs/recordInfo?taskId=' + job.clip2TaskId, job.reqKey);
+      const task = data.data || data;
+      if (task.state === 'fail') {
+        omni16Jobs.delete(compoundId);
+        localLogUpdate(compoundId, { state: 'fail', failMsg: task.failMsg });
+        return res.json({ status: 'failed', error: 'Часть 2 из 2: ' + (task.failMsg || 'ошибка генерации') });
+      }
+      if (task.state !== 'success') return res.json({ status: 'pending', stage: 'Генерация части 2 из 2...' });
+
+      let clip2Url = '';
+      try { clip2Url = JSON.parse(task.resultJson || '{}').resultUrls?.[0] || ''; } catch {}
+      if (!clip2Url) throw new Error('Часть 2 завершилась без результата');
+
+      const clip2Path = path.join(OMNI16_DIR, compoundId + '_part2.mp4');
+      await downloadToFile(clip2Url, clip2Path);
+      const outPath = path.join(OMNI16_DIR, compoundId + '.mp4');
+      await concatVideos(job.clip1Path, clip2Path, outPath);
+
+      try { fs.unlinkSync(job.clip1Path); } catch {}
+      try { fs.unlinkSync(clip2Path); } catch {}
+
+      const finalUrl = '/videogen-output/' + compoundId + '.mp4';
+      omni16Jobs.delete(compoundId);
+      localLogUpdate(compoundId, { state: 'success', resultJson: JSON.stringify({ resultUrls: [finalUrl] }) });
+      return res.json({ status: 'success', url: finalUrl });
+    }
+
+    res.json({ status: 'error', error: 'Неизвестная фаза задачи' });
+  } catch (e) {
+    res.json({ status: 'error', error: e.message });
+  }
+}
 
 // ── Video Cutting endpoints ──
 

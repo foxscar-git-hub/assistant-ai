@@ -9,4 +9,5 @@ data/*.db-wal
 data/cut-uploads/
 data/era/
 data/videogen-logs.json
+data/videogen-output/
 bin/
