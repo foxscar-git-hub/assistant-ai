@@ -1060,6 +1060,7 @@
                         <span id="vgen-last-label">last_frame_image</span>
                         <div style="display:flex;gap:6px;align-items:center;">
                           <button onclick="vrefPickOpen('last')" style="background:none;border:1px solid var(--border);border-radius:5px;color:var(--text-muted);font-size:11px;cursor:pointer;padding:2px 8px;">📁 Библ.</button>
+                          <img id="vgen-outro-thumb" style="display:none;width:20px;height:20px;object-fit:cover;border-radius:4px;border:1px solid rgba(108,99,255,0.5);" title="Сохранённое аутро">
                           <button onclick="vgenOutroApply()" id="vgen-outro-btn" style="background:none;border:1px solid rgba(108,99,255,0.4);border-radius:5px;color:var(--accent);font-size:11px;cursor:pointer;padding:2px 8px;" title="Применить сохранённое аутро (лого + призыв подписаться/перейти на маркетплейс) как последний кадр. Если ещё не сохранено — предложит загрузить.">🏷 Аутро</button>
                           <button onclick="document.getElementById('vgen-outro-input').click()" style="background:none;border:none;color:var(--text-muted);font-size:11px;cursor:pointer;padding:2px 4px;" title="Загрузить/заменить сохранённое аутро">✎</button>
                           <input type="file" id="vgen-outro-input" accept="image/*" style="display:none;" onchange="vgenOutroUpload(event)">
@@ -2799,6 +2800,13 @@ function vcardActivate(p) {
 }
 
 // ── Аутро (лого + призыв подписаться/перейти на маркетплейс) — сохраняется один раз, переиспользуется как last_frame ──
+function vgenOutroUpdateThumb() {
+  const thumb = document.getElementById('vgen-outro-thumb');
+  if (!thumb) return;
+  const saved = localStorage.getItem('vgen_outro_image');
+  if (saved) { thumb.src = saved; thumb.style.display = 'inline-block'; }
+  else thumb.style.display = 'none';
+}
 function vgenOutroApply() {
   const saved = localStorage.getItem('vgen_outro_image');
   if (saved) {
@@ -2823,6 +2831,7 @@ function vgenOutroUpload(event) {
       if (!d.ok || !d.url) throw new Error(d.error || 'Не удалось загрузить аутро');
       localStorage.setItem('vgen_outro_image', d.url);
       vgenSetImage('last', d.url);
+      vgenOutroUpdateThumb();
     } catch (e) {
       alert('Ошибка сохранения аутро: ' + e.message);
     }
@@ -3071,6 +3080,7 @@ document.addEventListener('DOMContentLoaded', () => {
   vgenHistoryRender();
   // нормализуем панель под конфиг модели (подмодели, режимы, разрешения)
   vgenSelectModel(vgenActiveModel);
+  vgenOutroUpdateThumb();
 });
 
 // ═══════ Drag & Drop nav items between blocks ═══════
