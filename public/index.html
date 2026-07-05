@@ -2147,6 +2147,10 @@ function vgenHistoryLoad() {
     let repaired = false;
     list.forEach(item => {
       if (item.projectId && !('cardId' in item)) { delete item.projectId; repaired = true; }
+      // Записи старше введения id вообще не имели этого поля — их кнопка "✕"
+      // рендерилась как onclick="vgenHistoryDelete('undefined')" и не находила
+      // совпадений ни у одной записи, поэтому не удаляла вообще ничего.
+      if (!item.id) { item.id = 'h_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7); repaired = true; }
     });
     if (repaired) localStorage.setItem(VGEN_HIST_KEY, JSON.stringify(list));
     return list;
