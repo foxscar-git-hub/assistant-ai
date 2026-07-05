@@ -542,10 +542,13 @@ Rules:
   • cartoon: "Animated cartoon style, vibrant colors, stylized characters, smooth 2D animation"
   • documentary: "Single continuous observational shot, naturalistic handheld, documentary realism"
   • ugc: "Single continuous handheld selfie-style shot, raw UGC content-creator video shot on a phone front camera, imperfect framing, natural handshake, unpolished home/room/outdoor setting, no professional lighting rig or crew"
+  • beforeafter: "Split-screen or wipe-transition before/after comparison shot, clean comparison framing, clear visible contrast between the two states, dramatic reveal moment"
+  • asmr: "Extreme macro close-up, slow deliberate hand movements, shallow depth of field, satisfying tactile product interaction, no fast cuts, no jarring motion"
+  • compare: "Side-by-side split-screen composition, our product on one side and a generic alternative on the other, synchronized parallel actions that make the difference obvious at a glance"
 - Use EXACT time markers for ${duration}s: ${buildTimeMarkers(duration)}
-- Use cinematic camera language: dolly, tilt, arc, crane, handheld, rack focus, whip pan (for ugc: keep it to natural handheld micro-movements only, no crane/dolly)
+- Use cinematic camera language: dolly, tilt, arc, crane, handheld, rack focus, whip pan (for ugc: keep it to natural handheld micro-movements only, no crane/dolly; for asmr: only slow static or micro-push-in, nothing fast)
 - Describe lighting, textures, atmosphere in vivid detail
-${format === 'ugc' ? '- The creator talks directly to camera the whole time — genuine excited reaction, casual conversational tone, like unboxing/reviewing the product for friends; end on an engaging call-to-action (e.g. "grab yours now", "link in bio", "trust me on this one")\n' : ''}- Add audio description LAST: ambient sounds, music tone, SFX
+${format === 'ugc' ? '- The creator talks directly to camera the whole time — genuine excited reaction, casual conversational tone, like unboxing/reviewing the product for friends; end on an engaging call-to-action (e.g. "grab yours now", "link in bio", "trust me on this one")\n' : ''}${format === 'asmr' ? '- SOUND IS THE STAR: describe tactile/product sounds in vivid, specific detail (lid twisting, cream squishing, jar tapping, brush bristles) as the main focus — no voiceover, minimal or no music, let the product sounds carry the video\n' : ''}${format === 'beforeafter' ? '- Make the "before" state and the "after" state each clearly, specifically described so the contrast is unmistakable — do not describe the transformation vaguely\n' : ''}${format === 'compare' ? '- Describe both sides of the comparison with equally specific visual detail so the advantage is shown, not just claimed\n' : ''}- Add audio description LAST: ambient sounds, music tone, SFX
 - End with style tags: "photorealistic, 35mm film grain, ARRI ALEXA aesthetic, no 3D, no cartoon" (skip for cartoon and ugc formats — ugc should end with "shot on iPhone front camera, authentic UGC aesthetic, no cinematic grading" instead)
 - Output ONLY the prompt text in English. No explanations. No intro lines.`,
 
@@ -563,6 +566,9 @@ Rules:
     format === 'documentary' ? 'observational, authentic, real-world setting' :
     format === 'ad' ? 'product-focused, aspirational, clean and polished' :
     format === 'ugc' ? 'raw handheld selfie-style UGC review/unboxing video shot on a phone front camera, creator talking directly to camera the whole time, genuine excited reaction, casual authentic home setting, imperfect natural lighting, NOT cinematic or polished; end on an engaging call-to-action' :
+    format === 'beforeafter' ? 'split-screen or transition-based before/after comparison, each state described with equally specific visual detail so the contrast is unmistakable, dramatic reveal moment' :
+    format === 'asmr' ? 'extreme macro close-up, slow deliberate tactile product interaction, satisfying sound-driven visuals, minimal cuts, no voiceover — describe ambient/product sounds as the main audio focus' :
+    format === 'compare' ? 'side-by-side split-screen composition, our product vs a generic alternative, synchronized parallel actions highlighting the difference' :
     'cinematic quality, dramatic lighting, professional'
   }
 - Describe visual style, color palette, lighting explicitly
@@ -574,8 +580,16 @@ Rules:
       format === 'documentary' ? 'naturalistic realism, observational perspective' :
       format === 'ad' ? 'product spotlight, clean composition, aspirational' :
       format === 'ugc' ? 'raw handheld selfie-style UGC review/unboxing, creator talking directly to camera the whole time, genuine excited reaction, casual authentic home setting, imperfect natural lighting, NOT cinematic or polished; end on an engaging call-to-action' :
+      format === 'beforeafter' ? 'split-screen or transition-based before/after comparison, each state described with equally specific visual detail so the contrast is unmistakable, dramatic reveal moment' :
+      format === 'asmr' ? 'extreme macro close-up, slow deliberate tactile product interaction, satisfying sound-driven visuals, minimal cuts' :
+      format === 'compare' ? 'side-by-side split-screen composition, our product vs a generic alternative, synchronized parallel actions highlighting the difference' :
       'cinematic depth, professional lighting';
     const ugcVoiceNote = format === 'ugc' ? ' For UGC: write the creator\'s spoken lines as natural casual speech (not scripted-sounding), including the closing call-to-action line.' : '';
+    // ASMR не использует закадровый голос — весь звук строится на тактильных
+    // звуках продукта, обычная обязательная голосовая реплика тут неуместна.
+    const voiceLine = (segLen) => format === 'asmr'
+      ? 'AUDIO PRIORITY: this is an ASMR-style video — NO spoken voiceover. Describe tactile/product sounds in vivid, specific detail (lid twisting, cream squishing, jar tapping) as the main audio focus; minimal or no background music.'
+      : omniVoiceoverRule(segLen) + ugcVoiceNote;
 
     if (Number(duration) === 16) {
       // 16с = два отдельных Omni-запроса по 8с, склеенные на сервере; первый кадр
@@ -593,12 +607,12 @@ Part 1 (seconds 0–8 of the story):
 - State camera angle and movement explicitly at the start
 - Add time-based progression for this 8s segment: ${buildTimeMarkers(8)}
 - End on a clear, precisely describable pose/moment — this exact frame becomes the opening of Part 2
-- ${omniVoiceoverRule(8)}${ugcVoiceNote}
+- ${voiceLine(8)}
 
 Part 2 (seconds 8–16 of the story, continues seamlessly from Part 1's ending frame):
 - Open by re-stating the continuation frame explicitly (same subject pose, same framing, same lighting Part 1 ended on) so the model anchors to it, then progress the story forward with new action or a reveal — do not repeat Part 1's beats
 - Add time-based progression treating this as its own 0–8s segment: ${buildTimeMarkers(8)}
-- ${omniVoiceoverRule(8)}${ugcVoiceNote}
+- ${voiceLine(8)}
 - End with a clear payoff / call-to-action appropriate for format "${format}"
 
 For format "${format}" (applies to both parts): ${formatNote}
@@ -613,7 +627,7 @@ Rules:
 - State camera angle and movement explicitly at the start
 - Add time-based progression for this ${duration}s clip: ${buildTimeMarkers(duration)}
 - For format "${format}": ${formatNote}
-- ${omniVoiceoverRule(Number(duration) || 8)}${ugcVoiceNote}
+- ${voiceLine(Number(duration) || 8)}
 - English text overlays are allowed if they add value
 - Describe mood, emotional tone, atmosphere
 - Output ONLY the prompt text in English (except Russian voiceover lines). No explanations.`;
@@ -623,6 +637,7 @@ Rules:
 const FORMAT_NAMES = {
   cinematic: 'Cinematic', viral: 'Viral Social Media', cartoon: 'Animated Cartoon',
   documentary: 'Documentary', ad: 'Advertisement', ugc: 'UGC Creator Review',
+  beforeafter: 'Before/After Transformation', asmr: 'ASMR', compare: 'Product Comparison',
 };
 
 // ── Придумать идею ролика (креативный концепт, не технический промпт) ──
@@ -637,6 +652,9 @@ Rules:
   • documentary: a compelling mini human-interest or investigative-style documentary angle
   • ad: a classic, polished, aspirational commercial concept
   • ugc: a relatable, everyday-person story or testimonial hook
+  • beforeafter: a specific, concrete visible transformation the product delivers — describe the exact "before" struggle and the exact "after" payoff moment, not a vague improvement
+  • asmr: a slow, sensory-focused ritual around the product — sound, texture, tactile satisfaction is the whole point; no fast cuts, no hard sell, no voiceover
+  • compare: a direct side-by-side "ours vs the old/generic way" moment that makes the product's advantage obvious at a glance, without needing to explain it
 - Be concrete and inspiring — a director should get excited reading it, not generic marketing fluff.
 - The idea must be realistically executable within the given duration.
 - Output only the idea itself in Russian. No preamble, no headers, no quotes, no markdown.`;

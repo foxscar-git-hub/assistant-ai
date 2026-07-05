@@ -1011,6 +1011,9 @@
                         <label class="vgen-fmt-btn" data-val="documentary"><input type="radio" name="vgen-format" value="documentary" style="display:none;">📹 Докумен.</label>
                         <label class="vgen-fmt-btn" data-val="ad"><input type="radio" name="vgen-format" value="ad" style="display:none;">📣 Реклама</label>
                         <label class="vgen-fmt-btn" data-val="ugc"><input type="radio" name="vgen-format" value="ugc" style="display:none;">🤳 UGC</label>
+                        <label class="vgen-fmt-btn" data-val="beforeafter"><input type="radio" name="vgen-format" value="beforeafter" style="display:none;">🔄 До/После</label>
+                        <label class="vgen-fmt-btn" data-val="asmr"><input type="radio" name="vgen-format" value="asmr" style="display:none;">🎧 ASMR</label>
+                        <label class="vgen-fmt-btn" data-val="compare"><input type="radio" name="vgen-format" value="compare" style="display:none;">⚖️ Сравнение</label>
                       </div>
                     </div>
 
@@ -2625,6 +2628,7 @@ async function vgenAnalyzeImage() {
         promptEl.value = existing + tag;
         promptEl.style.borderColor = 'var(--accent)';
         setTimeout(() => promptEl.style.borderColor = 'var(--border)', 2000);
+        vgenUpdateIdeaBtnState();
       }
       if (btn) { btn.textContent = '✓ Готово'; setTimeout(() => { btn.textContent = '🔍 Анализ'; btn.disabled = false; }, 2000); }
     } else {
@@ -2907,6 +2911,7 @@ function vcardActivate(p) {
     promptEl.value = existingVal + tag;
     promptEl.style.borderColor = 'var(--accent)';
     setTimeout(() => promptEl.style.borderColor = 'var(--border)', 2000);
+    vgenUpdateIdeaBtnState();
   }
   vgenHistoryRender();
 }
