@@ -673,11 +673,20 @@ app.post('/api/enhance-prompt', async (req, res) => {
       ? `\nReference images:\n${refLines.join('\n')}\nIMPORTANT: Integrate reference image instructions naturally into the prompt using "[reference_image: first_frame]" or "[reference_image: last_frame]" bracket tags where appropriate.`
       : '';
 
+    // Промпт может содержать тег [PRODUCT REFERENCE: ...] — из анализа фото (🔍 Анализ)
+    // или из карточки товара WB. При вольном пересказе идеи модель легко теряет точные
+    // детали (цвет, текст на упаковке, материал), поэтому выносим их отдельно и требуем
+    // сохранить дословно, а не растворять в общей формулировке.
+    const productMatch = prompt.match(/\[PRODUCT REFERENCE:\s*([\s\S]*?)\]/i);
+    const productNote = productMatch
+      ? `\n\nEXACT PRODUCT DETAILS (from photo analysis or product card) — these specifics MUST be preserved precisely in the rewritten prompt, do not generalize, paraphrase away, or drop any of them (colors, text/logos, materials, shape, packaging):\n"${productMatch[1].trim()}"`
+      : '';
+
     const userMsg = `Original idea (may be in Russian or any language): "${prompt}"
 
 Model: ${modelName}
 Duration: ${duration} seconds
-Format: ${FORMAT_NAMES[format] || format}${refNote}
+Format: ${FORMAT_NAMES[format] || format}${refNote}${productNote}
 
 Rewrite into an optimized ${modelName} video generation prompt. Include precise time markers for ${duration}s. Output only the prompt.`;
 
