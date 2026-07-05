@@ -1082,6 +1082,25 @@
                       </div>
                     </div>
 
+                    <!-- Доп. референсы для Omni: image_urls принимает до 7 картинок суммарно,
+                         не только first/last frame — Omni вообще не различает "первый/последний кадр" -->
+                    <div id="vgen-extra-refs-section" style="display:none;">
+                      <label style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+                        <span>доп. референсы (до 7 всего)</span>
+                        <button onclick="vrefPickOpen('extra')" style="background:none;border:1px solid var(--border);border-radius:5px;color:var(--text-muted);font-size:11px;cursor:pointer;padding:2px 8px;">📁 Библ.</button>
+                      </label>
+                      <div id="vgen-extra-refs-grid" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;"></div>
+                      <div id="vgen-extra-refs-drop" onclick="document.getElementById('vgen-extra-refs-input').click()"
+                        style="border:2px dashed var(--border);border-radius:8px;padding:10px;text-align:center;cursor:pointer;font-size:11px;color:var(--text-muted);transition:border-color 0.15s;"
+                        ondragover="event.preventDefault();this.style.borderColor='var(--accent)'"
+                        ondragleave="this.style.borderColor='var(--border)'"
+                        ondrop="vgenExtraRefDrop(event)"
+                        onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+                        <input type="file" id="vgen-extra-refs-input" accept="image/*" multiple style="display:none;" onchange="vgenExtraRefFile(event)">
+                        + Добавить фото
+                      </div>
+                    </div>
+
                     <!-- Параметры -->
                     <div style="display:flex;flex-direction:column;gap:10px;">
                       <div>
@@ -1964,19 +1983,69 @@ function vgenUpdateImageSections() {
   const lastSec  = document.getElementById('vgen-last-section');
   const firstLbl = document.getElementById('vgen-first-label');
   const lastLbl  = document.getElementById('vgen-last-label');
+  const extraSec = document.getElementById('vgen-extra-refs-section');
   if (!firstSec || !lastSec) return;
   if (vgenActiveModel === 'omni') {
     const show = vgenOmniMode === 'i2v';
     firstSec.style.display = show ? '' : 'none';
     lastSec.style.display  = show ? '' : 'none';
+    if (extraSec) extraSec.style.display = show ? '' : 'none';
     if (firstLbl) firstLbl.textContent = 'reference_image_1 (image_urls)';
     if (lastLbl)  lastLbl.textContent  = 'reference_image_2 (image_urls)';
   } else {
     firstSec.style.display = '';
     lastSec.style.display  = '';
+    // Только Omni принимает свободный набор до 7 референсов — у Seedance/Veo
+    // строго first_frame_url/last_frame_url, третьего слота у них нет
+    if (extraSec) extraSec.style.display = 'none';
     if (firstLbl) firstLbl.textContent = 'first_frame_image';
     if (lastLbl)  lastLbl.textContent  = 'last_frame_image';
   }
+}
+
+// ── Доп. референсы для Omni (image_urls до 7 суммарно, включая first/last frame) ──
+function vgenExtraRefsMax() {
+  const used = (vgenState.firstImageUrl ? 1 : 0) + (vgenState.lastImageUrl ? 1 : 0);
+  return Math.max(0, 7 - used);
+}
+function vgenAddExtraRef(dataUrl) {
+  if (!vgenState.extraImageUrls) vgenState.extraImageUrls = [];
+  if (vgenState.extraImageUrls.length >= vgenExtraRefsMax()) {
+    alert('У Omni лимит — до 7 референсов суммарно (включая First/Last frame). Уберите один, чтобы добавить другой.');
+    return;
+  }
+  vgenState.extraImageUrls.push(dataUrl);
+  vgenRenderExtraRefs();
+}
+function vgenRemoveExtraRef(i) {
+  vgenState.extraImageUrls.splice(i, 1);
+  vgenRenderExtraRefs();
+}
+function vgenRenderExtraRefs() {
+  const grid = document.getElementById('vgen-extra-refs-grid');
+  if (!grid) return;
+  const urls = vgenState.extraImageUrls || [];
+  grid.innerHTML = urls.map((url, i) => `
+    <div style="position:relative;width:56px;height:56px;">
+      <img src="${url}" style="width:100%;height:100%;object-fit:cover;border-radius:6px;border:1px solid var(--border);">
+      <button onclick="vgenRemoveExtraRef(${i})" style="position:absolute;top:-5px;right:-5px;background:#ef4444;color:#fff;border:none;border-radius:50%;width:16px;height:16px;font-size:10px;cursor:pointer;line-height:1;padding:0;">✕</button>
+    </div>`).join('');
+}
+function vgenExtraRefFile(event) {
+  Array.from(event.target.files).forEach(file => {
+    const reader = new FileReader();
+    reader.onload = () => vgenAddExtraRef(reader.result);
+    reader.readAsDataURL(file);
+  });
+  event.target.value = '';
+}
+function vgenExtraRefDrop(event) {
+  event.preventDefault();
+  Array.from(event.dataTransfer.files).filter(f => f.type.startsWith('image/')).forEach(file => {
+    const reader = new FileReader();
+    reader.onload = () => vgenAddExtraRef(reader.result);
+    reader.readAsDataURL(file);
+  });
 }
 
 // ── Reference Library ──
@@ -2039,7 +2108,7 @@ function vrefPickOpen(slot) {
   if (m) { m.style.display = 'flex'; }
   // update proj label
   const lbl = document.getElementById('vref-proj-label');
-  if (lbl) lbl.textContent = slot === 'first' ? 'Выбор для First Frame' : 'Выбор для Last Frame';
+  if (lbl) lbl.textContent = slot === 'first' ? 'Выбор для First Frame' : slot === 'last' ? 'Выбор для Last Frame' : 'Добавить доп. референс (Omni)';
 }
 
 function vrefClose() {
@@ -2073,7 +2142,11 @@ function vrefDelete(id) {
 
 function vrefPick(img) {
   if (!vrefPickSlot) return;
-  vgenSetImage(vrefPickSlot, img.data);
+  if (vrefPickSlot === 'extra') {
+    vgenAddExtraRef(img.data);
+  } else {
+    vgenSetImage(vrefPickSlot, img.data);
+  }
   vrefClose();
 }
 
@@ -2498,6 +2571,8 @@ function vgenReset() {
   vgenUpdateIdeaBtnState();
   vgenClearImage('first');
   vgenClearImage('last');
+  vgenState.extraImageUrls = [];
+  vgenRenderExtraRefs();
   // reset ratio
   const firstRatio = document.querySelector('input[name="vgen-ratio"]');
   if (firstRatio) { firstRatio.checked = true; firstRatio.closest('.vgen-ratio-btn')?.click(); }
@@ -3146,7 +3221,22 @@ async function vgenRun() {
       return;
     }
   }
-  if (model === 'omni' && vgenOmniMode === 'i2v' && !firstUrl && !lastUrl) {
+  // Доп. референсы (только Omni — до 7 суммарно с first/last frame)
+  let extraUrls = [];
+  if (!skipImages && model === 'omni' && vgenState.extraImageUrls?.length) {
+    vgenAnimateProgress(17);
+    for (const dataUrl of vgenState.extraImageUrls) {
+      const url = await vgenUploadImage(dataUrl);
+      if (!url) {
+        vgenShowError('Не удалось загрузить один из доп. референсов на KIE (' + (vgenLastUploadError || 'неизвестная ошибка') + ') — генерация остановлена.');
+        if (btn) { btn.disabled = false; btn.innerHTML = '▶ Run'; }
+        return;
+      }
+      extraUrls.push(url);
+    }
+  }
+
+  if (model === 'omni' && vgenOmniMode === 'i2v' && !firstUrl && !lastUrl && !extraUrls.length) {
     vgenShowError('Режим «Референсы → видео» требует хотя бы одно изображение. Прикрепите картинку или переключитесь на «Текст → видео».');
     if (btn) { btn.disabled = false; btn.innerHTML = '▶ Run'; }
     return;
@@ -3168,6 +3258,7 @@ async function vgenRun() {
     const body = { prompt, quality, aspect_ratio, duration, resolution, model };
     if (firstUrl) body.image_url = firstUrl;
     if (lastUrl) body.end_image_url = lastUrl;
+    if (extraUrls.length) body.image_urls = extraUrls;
 
     const endpoint = (model === 'omni' && vgenOmni16Active) ? '/api/videogen/omni16' : '/api/videogen';
     const r = await fetch(endpoint, {
