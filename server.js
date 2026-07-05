@@ -344,6 +344,25 @@ app.post('/api/kie/multiangle-image', async (req, res) => {
   }
 });
 
+// ── Загрузка произвольной картинки на диск, без обращения к OpenAI/KIE (для аутро и т.п.) ──
+// Хранить такие картинки как base64 в localStorage нельзя — на этом уже ловили
+// QuotaExceededError (см. коммит "fix localStorage quota") — поэтому сразу на диск.
+app.post('/api/upload-image', (req, res) => {
+  try {
+    const { base64 } = req.body || {};
+    if (!base64) return res.json({ ok: false, error: 'base64 не передан' });
+    const mimeMatch = base64.match(/^data:([^;]+);base64,/);
+    const mime = mimeMatch?.[1] || 'image/jpeg';
+    const ext = mime.includes('png') ? 'png' : mime.includes('webp') ? 'webp' : 'jpg';
+    const buf = Buffer.from(base64.replace(/^data:[^;]+;base64,/, ''), 'base64');
+    const filename = Date.now() + '_' + Math.random().toString(36).slice(2) + '.' + ext;
+    fs.writeFileSync(path.join(VREF_PROCESSED_DIR, filename), buf);
+    res.json({ ok: true, url: '/vref-processed/' + filename });
+  } catch (e) {
+    res.json({ ok: false, error: e.message });
+  }
+});
+
 // ── Wildberries: импорт карточки товара по ссылке (для видео-генерации) ──
 const WB_PRODUCTS_FILE = path.join(__dirname, 'data', 'wb-products.json');
 function wbProductsRead() {

@@ -2811,9 +2811,21 @@ function vgenOutroUpload(event) {
   const file = event.target.files[0];
   if (!file) return;
   const reader = new FileReader();
-  reader.onload = () => {
-    localStorage.setItem('vgen_outro_image', reader.result);
-    vgenSetImage('last', reader.result);
+  reader.onload = async () => {
+    // Храним не сам base64 (упирается в квоту localStorage — уже ловили это на
+    // библиотеке референсов), а ссылку на файл, сохранённый на сервере
+    try {
+      const r = await fetch('/api/upload-image', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ base64: reader.result }),
+      });
+      const d = await r.json();
+      if (!d.ok || !d.url) throw new Error(d.error || 'Не удалось загрузить аутро');
+      localStorage.setItem('vgen_outro_image', d.url);
+      vgenSetImage('last', d.url);
+    } catch (e) {
+      alert('Ошибка сохранения аутро: ' + e.message);
+    }
   };
   reader.readAsDataURL(file);
   event.target.value = '';
