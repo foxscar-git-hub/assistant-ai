@@ -204,28 +204,21 @@ app.post('/api/kie/upload-image', async (req, res) => {
 });
 
 // ── GPT-4 Vision: анализ фото товара ──
-app.post('/api/analyze-image', async (req, res) => {
-  try {
-    const { base64, openaiKey } = req.body || {};
-    const key = openaiKey || process.env.OPENAI_API_KEY || '';
-    if (!base64) return res.json({ ok: false, error: 'base64 не передан' });
-    if (!key) return res.json({ ok: false, error: 'Нужен OpenAI API ключ' });
-
-    // Принимает http(s)-URL, локальный путь библиотеки (/vref-processed/...) или base64
-    const dataUrl = /^https?:\/\//.test(base64) ? base64 : await resolveImageInput(base64);
-
-    const r = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        max_tokens: 800,
-        messages: [{
-          role: 'user',
-          content: [
-            {
-              type: 'text',
-              text: `Analyze this product image in detail for use as a video generation reference.
+// Принимает http(s)-URL, локальный путь библиотеки (/vref-processed/...) или base64
+async function analyzeProductImage(imageUrlOrBase64, key) {
+  const dataUrl = /^https?:\/\//.test(imageUrlOrBase64) ? imageUrlOrBase64 : await resolveImageInput(imageUrlOrBase64);
+  const r = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'gpt-4o',
+      max_tokens: 800,
+      messages: [{
+        role: 'user',
+        content: [
+          {
+            type: 'text',
+            text: `Analyze this product image in detail for use as a video generation reference.
 Describe in English:
 1. Product type and name
 2. Exact colors (primary, secondary, accents)
@@ -235,15 +228,24 @@ Describe in English:
 6. Any unique distinguishing features
 Be specific and detailed. Focus on visual details that must be preserved in video generation.
 Output ONLY the description, no intro phrases.`
-            },
-            { type: 'image_url', image_url: { url: dataUrl, detail: 'high' } }
-          ]
-        }]
-      })
-    });
-    const data = await r.json();
-    if (data.error) return res.json({ ok: false, error: data.error.message });
-    const description = data.choices?.[0]?.message?.content?.trim() || '';
+          },
+          { type: 'image_url', image_url: { url: dataUrl, detail: 'high' } }
+        ]
+      }]
+    })
+  });
+  const data = await r.json();
+  if (data.error) throw new Error(data.error.message);
+  return data.choices?.[0]?.message?.content?.trim() || '';
+}
+
+app.post('/api/analyze-image', async (req, res) => {
+  try {
+    const { base64, openaiKey } = req.body || {};
+    const key = openaiKey || process.env.OPENAI_API_KEY || '';
+    if (!base64) return res.json({ ok: false, error: 'base64 не передан' });
+    if (!key) return res.json({ ok: false, error: 'Нужен OpenAI API ключ' });
+    const description = await analyzeProductImage(base64, key);
     res.json({ ok: true, description });
   } catch (e) {
     res.json({ ok: false, error: e.message });
@@ -469,11 +471,22 @@ app.get('/api/wb/products', (req, res) => {
 
 app.post('/api/wb/products', async (req, res) => {
   try {
-    const { projectId, url, name } = req.body || {};
+    const { projectId, url, name, openaiKey: clientOpenaiKey } = req.body || {};
     if (!projectId) return res.json({ ok: false, error: 'projectId обязателен' });
     let card;
     if (url) {
-      card = { type: 'wb', ...(await wbFetchCard(url)) };
+      const fetched = await wbFetchCard(url);
+      // Анализируем каждое фото ОДИН РАЗ при импорте (не при каждом клике
+      // "Улучшить промт" — дорого и медленно повторять). Без ключа/на фото сверх
+      // лимита просто оставляем описание пустым — сама карточка всё равно импортится.
+      const key = clientOpenaiKey || process.env.OPENAI_API_KEY || '';
+      const imageUrls = fetched.images || [];
+      const images = await Promise.all(imageUrls.map(async (imgUrl, i) => {
+        if (!key || i >= 4) return { url: imgUrl, description: '' };
+        try { return { url: imgUrl, description: await analyzeProductImage(imgUrl, key) }; }
+        catch { return { url: imgUrl, description: '' }; }
+      }));
+      card = { type: 'wb', ...fetched, images };
     } else if (name && name.trim()) {
       // Кастомный под-проект (услуга/товар без карточки WB) — просто именованная сущность
       card = { type: 'custom', name: name.trim(), description: '', characteristics: [], images: [], url: null, nmId: null };

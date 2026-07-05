@@ -2008,6 +2008,21 @@ function vrefImgCardId(img) {
   return null;
 }
 
+// ── Кэш AI-описаний фото (url → текст) — заполняется один раз при импорте товара
+// с WB или ручном анализе, а не при каждом клике "Улучшить промт" ──
+function vgenGetDescMap() {
+  try { return JSON.parse(localStorage.getItem('vgen_image_descriptions') || '{}'); } catch { return {}; }
+}
+function vgenSetImageDescription(url, description) {
+  if (!url || !description) return;
+  const map = vgenGetDescMap();
+  map[url] = description;
+  localStorage.setItem('vgen_image_descriptions', JSON.stringify(map));
+}
+function vgenGetImageDescription(url) {
+  return url ? (vgenGetDescMap()[url] || null) : null;
+}
+
 function vrefOpen() {
   vrefPickSlot = null;
   const hint = document.getElementById('vref-pick-hint');
@@ -2122,7 +2137,11 @@ function vrefRender() {
         <button id="vref-upscale-${img.id}" onclick="event.stopPropagation();vrefKieProcess(${img.id},'upscale')" style="background:none;border:1px solid rgba(108,99,255,0.3);border-radius:3px;color:var(--accent);cursor:pointer;font-size:9px;padding:1px 4px;white-space:nowrap;" title="Апскейл до 2K через KIE">⬆️</button>
         <button id="vref-multiangle-${img.id}" onclick="event.stopPropagation();vrefKieProcess(${img.id},'multiangle')" style="background:none;border:1px solid rgba(5,150,105,0.4);border-radius:3px;color:#059669;cursor:pointer;font-size:9px;padding:1px 4px;white-space:nowrap;" title="Мультиракурс через KIE">📐</button>
         <button onclick="event.stopPropagation();vrefDelete(${img.id})" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:12px;padding:0;line-height:1;" title="Удалить">✕</button>
-      </div>`;
+      </div>
+      ${img.description ? `<details style="background:var(--card-bg);border-top:1px solid var(--border);font-size:9px;color:var(--text-muted);" onclick="event.stopPropagation()">
+        <summary style="cursor:pointer;padding:3px 6px;">📝 описание</summary>
+        <div style="padding:4px 6px;max-height:100px;overflow-y:auto;line-height:1.4;">${wbEsc(img.description)}</div>
+      </details>` : ''}`;
     if (isPick) {
       div.addEventListener('click', () => { div.style.borderColor='var(--accent)'; vrefPick(img); });
       div.addEventListener('mouseover', () => div.style.borderColor='var(--accent)');
@@ -2332,7 +2351,24 @@ const FORMAT_CONTEXT = {
   ad:        'Style: commercial advertisement, clean aesthetic, product-focused, aspirational lifestyle visuals, polished and modern',
 };
 
+// Если для текущего first/last frame уже есть кэшированное AI-описание (посчитано
+// при импорте товара или прошлым ручным анализом) и в промпте ещё нет тега
+// [PRODUCT REFERENCE: ...] — подставляем его автоматически. Так не нужно жать
+// "🔍 Анализ" заново при каждом выборе фото — быстрее и не тратит запросы повторно.
+function vgenAutoInjectRefDescription() {
+  const promptEl = document.getElementById('vgen-prompt');
+  if (!promptEl || /\[PRODUCT REFERENCE:/i.test(promptEl.value)) return;
+  const descs = [vgenState.firstImageUrl, vgenState.lastImageUrl]
+    .filter(Boolean)
+    .map(u => vgenGetImageDescription(u))
+    .filter(Boolean);
+  if (!descs.length) return;
+  const tag = `\n\n[PRODUCT REFERENCE: ${descs.join(' | ')}]`;
+  promptEl.value = promptEl.value.trim() + tag;
+}
+
 async function vgenEnhancePrompt() {
+  vgenAutoInjectRefDescription();
   const promptEl = document.getElementById('vgen-prompt');
   const btn = document.getElementById('vgen-enhance-btn');
   const status = document.getElementById('vgen-enhance-status');
@@ -2499,7 +2535,34 @@ function vgenClearOutput() {
 // Image upload helpers
 function vgenReadFile(file, slot) {
   const reader = new FileReader();
-  reader.onload = e => vgenSetImage(slot, e.target.result);
+  reader.onload = async () => {
+    const dataUrl = reader.result;
+    vgenSetImage(slot, dataUrl);
+    // Если сейчас выбран товар/услуга — сохраняем вручную загруженное фото в
+    // библиотеку проекта с привязкой к нему, иначе оно используется один раз
+    // и теряется при следующей генерации. Через сервер, не base64 в localStorage —
+    // там уже ловили quota (см. фикс аутро).
+    if (vActiveCardId) {
+      try {
+        const r = await fetch('/api/upload-image', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ base64: dataUrl }),
+        });
+        const d = await r.json();
+        if (d.ok && d.url) {
+          const lib = vrefGetImages();
+          lib.unshift({
+            id: Date.now() + Math.random(),
+            name: (slot === 'first' ? 'First frame' : 'Last frame') + ' ' + new Date().toLocaleDateString('ru-RU'),
+            data: d.url,
+            added: Date.now(),
+            cardId: vActiveCardId,
+          });
+          vrefSaveImages(lib);
+        }
+      } catch {}
+    }
+  };
   reader.readAsDataURL(file);
 }
 function vgenFileImage(event, slot) { if (event.target.files[0]) vgenReadFile(event.target.files[0], slot); }
@@ -2559,6 +2622,7 @@ async function vgenAnalyzeImage() {
     });
     const d = await r.json();
     if (d.ok && d.description) {
+      vgenSetImageDescription(base64, d.description); // кэшируем — не спрашивать заново для этого же фото
       const promptEl = document.getElementById('vgen-prompt');
       if (promptEl) {
         const existing = promptEl.value.trim();
@@ -2702,6 +2766,10 @@ async function wbLoad() {
     const d = await r.json();
     wbProducts = d.ok ? d.products : [];
   } catch { wbProducts = []; }
+  // Кэшируем AI-описания фото товаров (посчитаны один раз при импорте на сервере)
+  wbProducts.forEach(p => (p.images || []).forEach(img => {
+    if (img?.url && img.description) vgenSetImageDescription(img.url, img.description);
+  }));
   wbRender();
   vcardPopulateSelect();
 }
@@ -2718,8 +2786,8 @@ function wbRender() {
     div.style.cssText = 'border:1px solid var(--border);border-radius:8px;overflow:hidden;cursor:pointer;transition:border-color 0.15s;position:relative;background:var(--bg);';
     div.addEventListener('mouseover', () => div.style.borderColor = 'var(--accent)');
     div.addEventListener('mouseout', () => div.style.borderColor = 'var(--border)');
-    const thumb = p.images?.[0]
-      ? `<img src="${p.images[0]}" style="width:100%;height:110px;object-fit:cover;display:block;background:#1a1c2a;" loading="lazy">`
+    const thumb = p.images?.[0]?.url
+      ? `<img src="${p.images[0].url}" style="width:100%;height:110px;object-fit:cover;display:block;background:#1a1c2a;" loading="lazy">`
       : `<div style="width:100%;height:110px;display:flex;align-items:center;justify-content:center;font-size:28px;background:#1a1c2a;">🔧</div>`;
     div.innerHTML = `
       ${thumb}
@@ -2741,12 +2809,13 @@ async function wbAddByLink() {
   if (!url) return;
   if (!vActiveProject) { if (status) status.textContent = 'Сначала выберите проект слева'; return; }
   const btn = document.getElementById('wb-add-btn');
-  if (btn) { btn.disabled = true; btn.textContent = '⏳ Загружаю...'; }
+  const openaiKey = localStorage.getItem('openai_api_key') || '';
+  if (btn) { btn.disabled = true; btn.textContent = openaiKey ? '⏳ Загружаю и анализирую фото...' : '⏳ Загружаю...'; }
   if (status) status.textContent = '';
   try {
     const r = await fetch('/api/wb/products', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ projectId: vActiveProject, url })
+      body: JSON.stringify({ projectId: vActiveProject, url, openaiKey })
     });
     const d = await r.json();
     if (!d.ok) throw new Error(d.error);
@@ -2821,13 +2890,16 @@ function vcardOnSelect(id) {
 function vcardActivate(p) {
   vActiveCardId = p.id;
   localStorage.setItem(vcardStorageKey(), p.id);
-  if (p.images?.[0]) vgenSetImage('first', p.images[0]);
-  // Остальные фото товара кладём в библиотеку проекта — можно быстро выбрать как last_frame
+  if (p.images?.[0]?.url) vgenSetImage('first', p.images[0].url);
+  // Остальные фото товара кладём в библиотеку проекта — можно быстро выбрать как last_frame.
+  // Кэшируем AI-описание каждого фото (посчитано один раз при импорте), чтобы
+  // "Улучшить промт" могло использовать его без повторного анализа.
+  (p.images || []).forEach(img => { if (img?.url) vgenSetImageDescription(img.url, img.description); });
   if (p.images?.length > 1) {
     const lib = vrefGetImages();
     const existing = new Set(lib.map(i => i.data));
-    p.images.slice(1).forEach((url, i) => {
-      if (!existing.has(url)) lib.unshift({ id: Date.now() + Math.random() + i, name: p.name + ' #' + (i + 2), data: url, added: Date.now(), badge: 'wb', sourceId: p.id });
+    p.images.slice(1).forEach((img, i) => {
+      if (img?.url && !existing.has(img.url)) lib.unshift({ id: Date.now() + Math.random() + i, name: p.name + ' #' + (i + 2), data: img.url, description: img.description || undefined, added: Date.now(), badge: 'wb', sourceId: p.id });
     });
     vrefSaveImages(lib);
   }
