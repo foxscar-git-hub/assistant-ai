@@ -1079,6 +1079,11 @@
                       </div>
                     </div>
 
+                    <!-- Мультиракурс из загруженных референсов -->
+                    <button onclick="vgenMultiangleFromRefs()" id="vgen-multiangle-refs-btn" style="width:100%;background:rgba(5,150,105,0.12);border:1px solid rgba(5,150,105,0.4);border-radius:7px;padding:8px;font-size:12px;font-weight:700;color:#059669;cursor:pointer;" title="Собрать один референс-лист (4 ракурса) из загруженных First/Last frame в 4K (gpt-image-2, с откатом на 1536×1024 если модель недоступна) и сохранить в библиотеку проекта">
+                      📐✨ Мультиракурс 4K из референсов → в библиотеку
+                    </button>
+
                     <!-- Параметры -->
                     <div style="display:flex;flex-direction:column;gap:10px;">
                       <div>
@@ -2618,6 +2623,46 @@ async function vrefKieProcess(imgId, type) {
   } catch (e) {
     if (btn) { btn.textContent = type === 'upscale' ? '⬆️' : '📐'; btn.disabled = false; }
     alert('Ошибка: ' + e.message);
+  }
+}
+
+// Мультиракурс из текущих загруженных референсов (first/last frame) —
+// комбинирует их в один референс-лист (4 ракурса) и сохраняет в библиотеку проекта
+async function vgenMultiangleFromRefs() {
+  const btn = document.getElementById('vgen-multiangle-refs-btn');
+  const images = [vgenState.firstImageUrl, vgenState.lastImageUrl].filter(Boolean);
+  if (!images.length) { alert('Сначала загрузите хотя бы одно референсное изображение (First или Last frame)'); return; }
+  const openaiKey = localStorage.getItem('openai_api_key') || '';
+  if (!openaiKey) { alert('Нужен OpenAI API ключ в ⚙️ Настройках для мультиракурса'); return; }
+
+  const origHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '⏳ Генерирую мультиракурс...';
+  try {
+    const r = await fetch('/api/kie/multiangle-multi', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ images, openaiKey }),
+    });
+    const d = await r.json();
+    if (!d.ok || !d.url) throw new Error(d.error || 'Не удалось сгенерировать мультиракурс');
+
+    const lib = vrefGetImages();
+    lib.unshift({
+      id: Date.now() + Math.random(),
+      name: '📐 Мультиракурс (' + images.length + ' реф.)',
+      data: d.url,
+      added: Date.now(),
+      badge: 'multiangle',
+      cardId: vActiveCardId || undefined,
+    });
+    vrefSaveImages(lib);
+
+    btn.innerHTML = '✓ Сохранено в библиотеку';
+    setTimeout(() => { btn.innerHTML = origHtml; btn.disabled = false; }, 2500);
+  } catch (e) {
+    alert('Ошибка: ' + e.message);
+    btn.innerHTML = origHtml;
+    btn.disabled = false;
   }
 }
 

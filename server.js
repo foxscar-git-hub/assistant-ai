@@ -255,27 +255,30 @@ const VREF_PROCESSED_DIR = path.join(__dirname, 'data', 'vref-processed');
 if (!fs.existsSync(VREF_PROCESSED_DIR)) fs.mkdirSync(VREF_PROCESSED_DIR, { recursive: true });
 app.use('/vref-processed/', express.static(VREF_PROCESSED_DIR));
 
-async function openaiImageEdit(base64, prompt, openaiKey, size = '1024x1024') {
+async function openaiImageEdit(images, prompt, openaiKey, size = '1024x1024', preferHighRes = false) {
   const { Blob } = require('buffer');
-  // Detect actual mime type from data URI
-  const mimeMatch = base64.match(/^data:([^;]+);base64,/);
-  const mime = mimeMatch?.[1] || 'image/jpeg';
-  const ext = mime.includes('png') ? 'png' : mime.includes('webp') ? 'webp' : 'jpg';
-  const buf = Buffer.from(base64.replace(/^data:[^;]+;base64,/, ''), 'base64');
+  // images может быть одной base64-строкой (старые вызовы) или массивом — для
+  // мультиракурса из нескольких референсов сразу
+  const toBlob = (base64) => {
+    const mimeMatch = base64.match(/^data:([^;]+);base64,/);
+    const mime = mimeMatch?.[1] || 'image/jpeg';
+    const ext = mime.includes('png') ? 'png' : mime.includes('webp') ? 'webp' : 'jpg';
+    const buf = Buffer.from(base64.replace(/^data:[^;]+;base64,/, ''), 'base64');
+    // OpenAI edits API requires image < 4MB
+    if (buf.length > 3.9 * 1024 * 1024) throw new Error('Изображение слишком большое (>4MB). Сожмите перед обработкой.');
+    return { blob: new Blob([buf], { type: mime }), ext };
+  };
+  const imageList = (Array.isArray(images) ? images : [images]).map(toBlob);
 
-  // OpenAI edits API requires image < 4MB
-  if (buf.length > 3.9 * 1024 * 1024) throw new Error('Изображение слишком большое (>4MB). Сожмите перед обработкой.');
-
-  const blob = new Blob([buf], { type: mime });
-
-  const tryEdit = async (model, extraParams = {}) => {
+  const tryEdit = async (model, list, sz, extraParams = {}) => {
     const form = new FormData();
-    form.append('image', blob, 'image.' + ext);
+    // OpenAI ожидает повторяющееся поле image[] при нескольких картинках
+    list.forEach(({ blob, ext }, i) => form.append(list.length > 1 ? 'image[]' : 'image', blob, `image${i}.${ext}`));
     form.append('prompt', prompt.slice(0, model === 'dall-e-2' ? 1000 : 32000));
     form.append('model', model);
     form.append('n', '1');
-    form.append('size', model === 'dall-e-2' ? '1024x1024' : size);
-    // dall-e-2 needs response_format; gpt-image-1 does NOT accept it
+    form.append('size', sz);
+    // dall-e-2 needs response_format; gpt-image-1/2 do NOT accept it
     if (model === 'dall-e-2') form.append('response_format', 'b64_json');
     Object.entries(extraParams).forEach(([k, v]) => form.append(k, v));
     const r = await fetch('https://api.openai.com/v1/images/edits', {
@@ -286,10 +289,19 @@ async function openaiImageEdit(base64, prompt, openaiKey, size = '1024x1024') {
     return { r, data: await r.json() };
   };
 
-  let { r, data } = await tryEdit('gpt-image-1');
-  // Fallback to dall-e-2 on any error
+  let r, data;
+  // gpt-image-2 (апрель 2026) — единственная модель с честным 4K; пробуем её первой,
+  // только когда запрошено высокое разрешение. При любой ошибке (модель недоступна на
+  // аккаунте, другой формат ответа и т.п.) откатываемся на проверенный gpt-image-1.
+  if (preferHighRes) {
+    ({ r, data } = await tryEdit('gpt-image-2', imageList, '3840x2160'));
+  }
+  if (!preferHighRes || data?.error) {
+    ({ r, data } = await tryEdit('gpt-image-1', imageList, size));
+  }
+  // dall-e-2 принимает только одно исходное изображение — фолбэк только на первом
   if (data.error) {
-    ({ r, data } = await tryEdit('dall-e-2'));
+    ({ r, data } = await tryEdit('dall-e-2', imageList.slice(0, 1), '1024x1024'));
   }
   if (data.error) throw new Error(data.error.message);
   const b64 = data.data?.[0]?.b64_json || data.data?.[0]?.url;
@@ -337,6 +349,31 @@ app.post('/api/kie/multiangle-image', async (req, res) => {
       await resolveImageInput(base64),
       `Create a product reference sheet showing this exact product from 4 angles arranged in a 2x2 grid: front view (top-left), right side view (top-right), back view (bottom-left), 45-degree angle view (bottom-right). Clean white background, professional studio lighting, product photography style.${desc} Preserve all product details, colors, textures, logos exactly.`,
       openaiKey, '1024x1024'
+    );
+    res.json({ ok: true, url });
+  } catch (e) {
+    res.json({ ok: false, error: e.message });
+  }
+});
+
+// ── Мультиракурс из НЕСКОЛЬКИХ загруженных референсов сразу (first/last frame формы
+// генерации видео) — не из одной библиотечной карточки, а комбинируя все переданные
+// фото в один референс-лист. Пробуем честный 4K через gpt-image-2 (апрель 2026),
+// с откатом на gpt-image-1 (1536x1024), если модель недоступна на аккаунте.
+app.post('/api/kie/multiangle-multi', async (req, res) => {
+  try {
+    const { images, openaiKey: clientOpenaiKey, productDescription = '' } = req.body || {};
+    const openaiKey = clientOpenaiKey || process.env.OPENAI_API_KEY || '';
+    if (!Array.isArray(images) || !images.length) return res.json({ ok: false, error: 'Нужно хотя бы одно референсное изображение' });
+    if (!openaiKey) return res.json({ ok: false, error: 'Нужен OpenAI API ключ в настройках' });
+
+    const resolved = await Promise.all(images.slice(0, 6).map(img => resolveImageInput(img)));
+    const desc = productDescription ? ` Product details: ${productDescription.slice(0, 300)}.` : '';
+    const multiNote = resolved.length > 1 ? ' These are multiple reference photos of the SAME exact product from different angles/contexts — use all of them together to accurately reconstruct its true appearance.' : '';
+    const url = await openaiImageEdit(
+      resolved,
+      `Using the provided reference photo(s), create a single product reference sheet showing this exact product from 4 angles arranged in a 2x2 grid: front view (top-left), right side view (top-right), back view (bottom-left), 45-degree angle view (bottom-right). Clean white background, professional studio lighting, product photography style.${multiNote}${desc} Preserve all product details, colors, textures, logos exactly.`,
+      openaiKey, '1536x1024', true
     );
     res.json({ ok: true, url });
   } catch (e) {
