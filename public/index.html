@@ -430,6 +430,13 @@
     line-height: 1;
   }
   .vgen-hist-item:hover .vgen-hist-del { display: flex; }
+  .vgen-hist-item .vgen-hist-expand {
+    position: absolute; top: 3px; left: 3px; width: 16px; height: 16px;
+    background: rgba(0,0,0,0.6); border: none; border-radius: 50%; color: #fff;
+    font-size: 9px; cursor: pointer; display: none; align-items: center; justify-content: center;
+    line-height: 1;
+  }
+  .vgen-hist-item:hover .vgen-hist-expand { display: flex; }
   #vtab-logs { display: none; }
   #vtab-logs.active { display: flex !important; flex-direction: column; flex: 1; overflow: hidden; padding: 0; }
 
@@ -1023,8 +1030,8 @@
                         <button id="vgen-idea-btn" onclick="vgenGenerateIdea()" style="margin-left:auto;background:rgba(108,99,255,0.15);border:1px solid rgba(108,99,255,0.4);border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700;color:var(--accent);cursor:pointer;text-transform:none;letter-spacing:normal;" title="Придумать идею ролика по товару, формату и длительности">💡 Идея</button>
                       </label>
                       <textarea id="vgen-prompt" placeholder="Опишите видео которое хотите создать..."
-                        style="width:100%;min-height:90px;background:var(--card-bg);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-size:13px;resize:vertical;font-family:inherit;outline:none;line-height:1.5;"
-                        oninput="vgenUpdateIdeaBtnState()"
+                        style="width:100%;min-height:90px;max-height:260px;background:var(--card-bg);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-size:13px;resize:vertical;font-family:inherit;outline:none;line-height:1.5;overflow-y:auto;"
+                        oninput="vgenUpdateIdeaBtnState();vgenAutoGrowPrompt(this)"
                         onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'"></textarea>
                       <!-- Кнопка улучшить промт -->
                       <div style="margin-top:6px;display:flex;align-items:center;gap:8px;">
@@ -1082,23 +1089,20 @@
                       </div>
                     </div>
 
-                    <!-- Доп. референсы для Omni: image_urls принимает до 7 картинок суммарно,
-                         не только first/last frame — Omni вообще не различает "первый/последний кадр" -->
-                    <div id="vgen-extra-refs-section" style="display:none;">
+                    <!-- Omni: единое окно референс-фото тайлами (image_urls, до 7) —
+                         Omni вообще не различает "первый/последний кадр", поэтому вместо
+                         2 больших блоков + доп.референсов показываем всё одним компактным гридом -->
+                    <div id="vgen-omni-tiles-section" style="display:none;">
                       <label style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-                        <span>доп. референсы (до 7 всего)</span>
-                        <button onclick="vrefPickOpen('extra')" style="background:none;border:1px solid var(--border);border-radius:5px;color:var(--text-muted);font-size:11px;cursor:pointer;padding:2px 8px;">📁 Библ.</button>
+                        <span>reference photos (image_urls, до 7)</span>
+                        <div style="display:flex;gap:6px;align-items:center;">
+                          <button onclick="vrefPickOpen('omni')" style="background:none;border:1px solid var(--border);border-radius:5px;color:var(--text-muted);font-size:11px;cursor:pointer;padding:2px 8px;" title="Выбрать из библиотеки">📁 Библ.</button>
+                          <button id="vgen-analyze-btn-omni" onclick="vgenAnalyzeImage()" style="background:none;border:1px solid rgba(108,99,255,0.4);border-radius:5px;color:var(--accent);font-size:11px;cursor:pointer;padding:2px 8px;display:none;" title="Анализ первого фото через GPT-4o — добавит описание товара в промт">🔍 Анализ</button>
+                          <button onclick="vgenOutroApply()" style="background:none;border:1px solid rgba(108,99,255,0.4);border-radius:5px;color:var(--accent);font-size:11px;cursor:pointer;padding:2px 8px;" title="Добавить сохранённое аутро (лого + призыв) одним из референсов">🏷 Аутро</button>
+                        </div>
                       </label>
-                      <div id="vgen-extra-refs-grid" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;"></div>
-                      <div id="vgen-extra-refs-drop" onclick="document.getElementById('vgen-extra-refs-input').click()"
-                        style="border:2px dashed var(--border);border-radius:8px;padding:10px;text-align:center;cursor:pointer;font-size:11px;color:var(--text-muted);transition:border-color 0.15s;"
-                        ondragover="event.preventDefault();this.style.borderColor='var(--accent)'"
-                        ondragleave="this.style.borderColor='var(--border)'"
-                        ondrop="vgenExtraRefDrop(event)"
-                        onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
-                        <input type="file" id="vgen-extra-refs-input" accept="image/*" multiple style="display:none;" onchange="vgenExtraRefFile(event)">
-                        + Добавить фото
-                      </div>
+                      <div id="vgen-omni-tiles-grid" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
+                      <input type="file" id="vgen-omni-tiles-input" accept="image/*" multiple style="display:none;" onchange="vgenOmniTilesFile(event)">
                     </div>
 
                     <!-- Параметры -->
@@ -1983,27 +1987,28 @@ function vgenUpdateImageSections() {
   const lastSec  = document.getElementById('vgen-last-section');
   const firstLbl = document.getElementById('vgen-first-label');
   const lastLbl  = document.getElementById('vgen-last-label');
-  const extraSec = document.getElementById('vgen-extra-refs-section');
+  const omniSec  = document.getElementById('vgen-omni-tiles-section');
   if (!firstSec || !lastSec) return;
   if (vgenActiveModel === 'omni') {
     const show = vgenOmniMode === 'i2v';
-    firstSec.style.display = show ? '' : 'none';
-    lastSec.style.display  = show ? '' : 'none';
-    if (extraSec) extraSec.style.display = show ? '' : 'none';
-    if (firstLbl) firstLbl.textContent = 'reference_image_1 (image_urls)';
-    if (lastLbl)  lastLbl.textContent  = 'reference_image_2 (image_urls)';
+    // Omni не различает first/last кадр — вместо 2 больших блоков показываем
+    // единое окно тайлами (экономит место), first/last остаются лишь во внутреннем состоянии
+    firstSec.style.display = 'none';
+    lastSec.style.display  = 'none';
+    if (omniSec) {
+      omniSec.style.display = show ? '' : 'none';
+      if (show) vgenRenderOmniTiles();
+    }
   } else {
     firstSec.style.display = '';
     lastSec.style.display  = '';
-    // Только Omni принимает свободный набор до 7 референсов — у Seedance/Veo
-    // строго first_frame_url/last_frame_url, третьего слота у них нет
-    if (extraSec) extraSec.style.display = 'none';
+    if (omniSec) omniSec.style.display = 'none';
     if (firstLbl) firstLbl.textContent = 'first_frame_image';
     if (lastLbl)  lastLbl.textContent  = 'last_frame_image';
   }
 }
 
-// ── Доп. референсы для Omni (image_urls до 7 суммарно, включая first/last frame) ──
+// ── Omni: единое окно референс-фото тайлами (image_urls до 7 суммарно — first/last/доп. объединены) ──
 function vgenExtraRefsMax() {
   const used = (vgenState.firstImageUrl ? 1 : 0) + (vgenState.lastImageUrl ? 1 : 0);
   return Math.max(0, 7 - used);
@@ -2015,41 +2020,79 @@ function vgenAddExtraRef(dataUrl) {
     return;
   }
   vgenState.extraImageUrls.push(dataUrl);
-  vgenRenderExtraRefs();
+  vgenRenderOmniTiles();
 }
 function vgenRemoveExtraRef(i) {
   vgenState.extraImageUrls.splice(i, 1);
-  vgenRenderExtraRefs();
+  vgenRenderOmniTiles();
 }
-function vgenRenderExtraRefs() {
-  const grid = document.getElementById('vgen-extra-refs-grid');
+// Единый список тайлов Omni: сперва first/last (если заданы через старые слоты), затем доп.референсы
+function vgenOmniTilesList() {
+  const list = [];
+  if (vgenState.firstImageUrl) list.push({ slot: 'first', url: vgenState.firstImageUrl });
+  if (vgenState.lastImageUrl) list.push({ slot: 'last', url: vgenState.lastImageUrl });
+  (vgenState.extraImageUrls || []).forEach((url, i) => list.push({ slot: 'extra', index: i, url }));
+  return list;
+}
+// Новое фото садится в первый свободный слот: first → last → доп.референсы
+function vgenOmniTilesAdd(dataUrl) {
+  if (!vgenState.firstImageUrl) vgenSetImage('first', dataUrl);
+  else if (!vgenState.lastImageUrl) vgenSetImage('last', dataUrl);
+  else vgenAddExtraRef(dataUrl);
+}
+function vgenOmniTilesRemove(slot, index) {
+  if (slot === 'first') vgenClearImage('first');
+  else if (slot === 'last') vgenClearImage('last');
+  else vgenRemoveExtraRef(index);
+}
+function vgenRenderOmniTiles() {
+  const grid = document.getElementById('vgen-omni-tiles-grid');
   if (!grid) return;
-  const urls = vgenState.extraImageUrls || [];
-  grid.innerHTML = urls.map((url, i) => `
-    <div style="position:relative;width:56px;height:56px;">
-      <img src="${url}" style="width:100%;height:100%;object-fit:cover;border-radius:6px;border:1px solid var(--border);">
-      <button onclick="vgenRemoveExtraRef(${i})" style="position:absolute;top:-5px;right:-5px;background:#ef4444;color:#fff;border:none;border-radius:50%;width:16px;height:16px;font-size:10px;cursor:pointer;line-height:1;padding:0;">✕</button>
+  const list = vgenOmniTilesList();
+  const tiles = list.map(item => `
+    <div style="position:relative;width:72px;height:72px;">
+      <img src="${item.url}" style="width:100%;height:100%;object-fit:cover;border-radius:6px;border:1px solid var(--border);">
+      <button onclick="vgenOmniTilesRemove('${item.slot}', ${item.index !== undefined ? item.index : 'null'})" style="position:absolute;top:-5px;right:-5px;background:#ef4444;color:#fff;border:none;border-radius:50%;width:18px;height:18px;font-size:11px;cursor:pointer;line-height:1;padding:0;">✕</button>
     </div>`).join('');
+  const addTile = list.length < 7 ? `
+    <div onclick="document.getElementById('vgen-omni-tiles-input').click()"
+      style="width:72px;height:72px;border:2px dashed var(--border);border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text-muted);font-size:24px;transition:border-color 0.15s;"
+      ondragover="event.preventDefault();this.style.borderColor='var(--accent)'"
+      ondragleave="this.style.borderColor='var(--border)'"
+      ondrop="vgenOmniTilesDrop(event)"
+      onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">+</div>` : '';
+  grid.innerHTML = tiles + addTile;
 }
-function vgenExtraRefFile(event) {
-  Array.from(event.target.files).forEach(file => {
+function vgenOmniTilesFile(event) {
+  Array.from(event.target.files).filter(vgenCheckImageSize).forEach(file => {
     const reader = new FileReader();
-    reader.onload = () => vgenAddExtraRef(reader.result);
+    reader.onload = () => vgenOmniTilesAdd(reader.result);
     reader.readAsDataURL(file);
   });
   event.target.value = '';
 }
-function vgenExtraRefDrop(event) {
+function vgenOmniTilesDrop(event) {
   event.preventDefault();
-  Array.from(event.dataTransfer.files).filter(f => f.type.startsWith('image/')).forEach(file => {
+  Array.from(event.dataTransfer.files).filter(f => f.type.startsWith('image/')).filter(vgenCheckImageSize).forEach(file => {
     const reader = new FileReader();
-    reader.onload = () => vgenAddExtraRef(reader.result);
+    reader.onload = () => vgenOmniTilesAdd(reader.result);
     reader.readAsDataURL(file);
   });
 }
 
 // ── Reference Library ──
-let vrefPickSlot = null; // 'first' | 'last' | null
+let vrefPickSlot = null; // 'first' | 'last' | 'omni' | null
+let vrefMultiSelected = []; // выбранные изображения (в порядке клика) — режим множественного выбора для slot==='omni'
+
+// Общий лимит размера референсного изображения — 20MB (совпадает с лимитом image_urls у Omni, см. docs.kie.ai)
+const VGEN_MAX_IMAGE_MB = 20;
+function vgenCheckImageSize(file) {
+  if (file.size > VGEN_MAX_IMAGE_MB * 1024 * 1024) {
+    alert(`Файл "${file.name}" слишком большой (${(file.size / 1024 / 1024).toFixed(1)}MB). Максимум ${VGEN_MAX_IMAGE_MB}MB для референсного изображения.`);
+    return false;
+  }
+  return true;
+}
 
 function vrefKey() {
   // per-project key using current selected project id
@@ -2101,24 +2144,68 @@ function vrefOpen() {
 
 function vrefPickOpen(slot) {
   vrefPickSlot = slot;
+  vrefMultiSelected = [];
   const hint = document.getElementById('vref-pick-hint');
-  if (hint) hint.style.display = 'block';
+  if (hint) {
+    hint.style.display = 'block';
+    hint.textContent = slot === 'omni'
+      ? 'Кликните на изображения чтобы выбрать несколько (до лимита Omni), затем нажмите «Добавить выбранные»'
+      : 'Кликните на изображение чтобы выбрать его как референс';
+  }
   vrefRender();
   const m = document.getElementById('modal-vref');
   if (m) { m.style.display = 'flex'; }
   // update proj label
   const lbl = document.getElementById('vref-proj-label');
-  if (lbl) lbl.textContent = slot === 'first' ? 'Выбор для First Frame' : slot === 'last' ? 'Выбор для Last Frame' : 'Добавить доп. референс (Omni)';
+  if (lbl) lbl.textContent = slot === 'first' ? 'Выбор для First Frame' : slot === 'last' ? 'Выбор для Last Frame' : slot === 'omni' ? 'Добавить референсы (Omni)' : 'Добавить доп. референс (Omni)';
 }
 
 function vrefClose() {
   vrefPickSlot = null;
+  vrefMultiSelected = [];
   const m = document.getElementById('modal-vref');
   if (m) m.style.display = 'none';
+  const btn = document.getElementById('vref-multi-add-btn');
+  if (btn) btn.style.display = 'none';
+}
+
+// Переключить выбор картинки в режиме мульти-выбора (только для slot === 'omni') —
+// позволяет за один заход библиотеки добавить сразу несколько референсов, а не
+// открывать модалку заново на каждую картинку.
+function vrefToggleSelect(img) {
+  const idx = vrefMultiSelected.findIndex(i => i.id === img.id);
+  if (idx >= 0) {
+    vrefMultiSelected.splice(idx, 1);
+  } else {
+    const used = vgenOmniTilesList().length;
+    if (used + vrefMultiSelected.length >= 7) {
+      alert('У Omni лимит — до 7 референсов суммарно (включая уже добавленные). Уберите один, чтобы выбрать другой.');
+      return;
+    }
+    vrefMultiSelected.push(img);
+  }
+  vrefRender();
+}
+
+function vrefUpdateMultiFooter() {
+  const btn = document.getElementById('vref-multi-add-btn');
+  if (!btn) return;
+  if (vrefPickSlot === 'omni' && vrefMultiSelected.length) {
+    btn.style.display = 'inline-block';
+    btn.textContent = `✓ Добавить выбранные (${vrefMultiSelected.length})`;
+  } else {
+    btn.style.display = 'none';
+  }
+}
+
+function vrefConfirmMulti() {
+  vrefMultiSelected.forEach(img => vgenOmniTilesAdd(img.data));
+  vrefMultiSelected = [];
+  vrefClose();
 }
 
 function vrefUpload(event) {
-  const files = Array.from(event.target.files);
+  const files = Array.from(event.target.files).filter(vgenCheckImageSize);
   if (!files.length) return;
   const images = vrefGetImages();
   let loaded = 0;
@@ -2144,6 +2231,8 @@ function vrefPick(img) {
   if (!vrefPickSlot) return;
   if (vrefPickSlot === 'extra') {
     vgenAddExtraRef(img.data);
+  } else if (vrefPickSlot === 'omni') {
+    vgenOmniTilesAdd(img.data);
   } else {
     vgenSetImage(vrefPickSlot, img.data);
   }
@@ -2182,14 +2271,22 @@ function vrefRender() {
   }
   if (empty) empty.style.display = 'none';
   const isPick = !!vrefPickSlot;
+  const isMulti = vrefPickSlot === 'omni';
+  const omniUsed = isMulti ? vgenOmniTilesList().length : 0;
   images.slice().reverse().forEach(img => {
     const div = document.createElement('div');
     div.className = 'vref-card';
-    div.style.cssText = 'position:relative;border-radius:8px;overflow:hidden;border:1px solid var(--border);cursor:' + (isPick ? 'pointer' : 'default') + ';transition:border-color 0.15s;';
+    const selIdx = isMulti ? vrefMultiSelected.findIndex(i => i.id === img.id) : -1;
+    const isSelected = selIdx >= 0;
+    const isDisabled = isMulti && !isSelected && (omniUsed + vrefMultiSelected.length >= 7);
+    div.style.cssText = 'position:relative;border-radius:8px;overflow:hidden;border:2px solid ' + (isSelected ? 'var(--accent)' : 'var(--border)') + ';cursor:' + (isDisabled ? 'not-allowed' : (isPick ? 'pointer' : 'default')) + ';opacity:' + (isDisabled ? '0.35' : '1') + ';transition:border-color 0.15s,opacity 0.15s;';
     const badgeHtml = img.badge === 'upscaled'
       ? '<span style="position:absolute;top:3px;left:3px;background:#6c63ff;color:#fff;font-size:8px;font-weight:700;border-radius:3px;padding:1px 4px;">⬆️2K</span>'
       : img.badge === 'multiangle'
       ? '<span style="position:absolute;top:3px;left:3px;background:#059669;color:#fff;font-size:8px;font-weight:700;border-radius:3px;padding:1px 4px;">📐</span>'
+      : '';
+    const selectBadgeHtml = isSelected
+      ? `<span style="position:absolute;top:3px;right:3px;background:var(--accent);color:#fff;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;">${selIdx + 1}</span>`
       : '';
     // Тег товара/услуги, к которому относится картинка — чтобы не путать референсы
     const cardId = vrefImgCardId(img);
@@ -2201,6 +2298,7 @@ function vrefRender() {
       <div style="position:relative;">
         <img src="${img.data}" style="width:100%;height:90px;object-fit:cover;display:block;" loading="lazy">
         ${badgeHtml}
+        ${selectBadgeHtml}
         ${cardTagHtml}
       </div>
       <div class="vref-card-footer" style="padding:4px 6px;background:var(--card-bg);display:flex;align-items:center;gap:3px;">
@@ -2214,12 +2312,17 @@ function vrefRender() {
         <div style="padding:4px 6px;max-height:100px;overflow-y:auto;line-height:1.4;">${wbEsc(img.description)}</div>
       </details>` : ''}`;
     if (isPick) {
-      div.addEventListener('click', () => { div.style.borderColor='var(--accent)'; vrefPick(img); });
-      div.addEventListener('mouseover', () => div.style.borderColor='var(--accent)');
-      div.addEventListener('mouseout', () => div.style.borderColor='var(--border)');
+      if (isMulti) {
+        if (!isDisabled) div.addEventListener('click', () => vrefToggleSelect(img));
+      } else {
+        div.addEventListener('click', () => { div.style.borderColor='var(--accent)'; vrefPick(img); });
+        div.addEventListener('mouseover', () => div.style.borderColor='var(--accent)');
+        div.addEventListener('mouseout', () => div.style.borderColor='var(--border)');
+      }
     }
     grid.appendChild(div);
   });
+  vrefUpdateMultiFooter();
 }
 
 // expose vprojSelected tracking so vrefKey works
@@ -2284,8 +2387,14 @@ function vgenHistoryRender() {
       <video src="${item.url}" muted preload="metadata" loop
         onmouseenter="this.play()" onmouseleave="this.pause();this.currentTime=0"></video>
       <div class="vgen-hist-badge">${item.model||''}${item.duration ? ' · '+item.duration+'s' : ''}</div>
+      <button class="vgen-hist-expand" onclick="event.stopPropagation();vgenHistoryExpand('${item.id}')" title="Во весь экран">⛶</button>
       <button class="vgen-hist-del" onclick="event.stopPropagation();vgenHistoryDelete('${item.id}')" title="Удалить">✕</button>
     </div>`).join('');
+}
+
+function vgenHistoryExpand(id) {
+  const item = vgenHistoryLoad().find(i => i.id === id);
+  if (item?.url) vgenOpenLightbox(item.url);
 }
 
 function vgenHistoryRestore(id) {
@@ -2314,7 +2423,7 @@ function vgenHistoryRestore(id) {
   }
   // Restore prompt
   const promptEl = document.getElementById('vgen-prompt');
-  if (promptEl && item.prompt) promptEl.value = item.prompt;
+  if (promptEl && item.prompt) { promptEl.value = item.prompt; vgenAutoGrowPrompt(promptEl); }
   vgenUpdateIdeaBtnState();
 
   // Restore duration
@@ -2567,12 +2676,14 @@ function vgenGetParam(name) {
 }
 
 function vgenReset() {
-  document.getElementById('vgen-prompt').value = '';
+  const promptEl = document.getElementById('vgen-prompt');
+  promptEl.value = '';
+  promptEl.style.height = '';
   vgenUpdateIdeaBtnState();
   vgenClearImage('first');
   vgenClearImage('last');
   vgenState.extraImageUrls = [];
-  vgenRenderExtraRefs();
+  vgenRenderOmniTiles();
   // reset ratio
   const firstRatio = document.querySelector('input[name="vgen-ratio"]');
   if (firstRatio) { firstRatio.checked = true; firstRatio.closest('.vgen-ratio-btn')?.click(); }
@@ -2607,6 +2718,7 @@ function vgenClearOutput() {
 
 // Image upload helpers
 function vgenReadFile(file, slot) {
+  if (!vgenCheckImageSize(file)) return;
   const reader = new FileReader();
   reader.onload = async () => {
     const dataUrl = reader.result;
@@ -2656,9 +2768,9 @@ function vgenSetImage(slot, dataUrl) {
   vgenState[slot + 'ImageUrl'] = dataUrl;
   // Show analyze button when first frame is loaded
   if (slot === 'first') {
-    const ab = document.getElementById('vgen-analyze-btn');
-    if (ab) ab.style.display = 'inline';
+    document.querySelectorAll('#vgen-analyze-btn, #vgen-analyze-btn-omni').forEach(ab => ab.style.display = 'inline');
   }
+  vgenRenderOmniTiles();
 }
 function vgenClearImage(slot) {
   const preview = document.getElementById(`vgen-${slot}-preview`);
@@ -2671,9 +2783,9 @@ function vgenClearImage(slot) {
   if (input) input.value = '';
   vgenState[slot + 'ImageUrl'] = null;
   if (slot === 'first') {
-    const ab = document.getElementById('vgen-analyze-btn');
-    if (ab) ab.style.display = 'none';
+    document.querySelectorAll('#vgen-analyze-btn, #vgen-analyze-btn-omni').forEach(ab => ab.style.display = 'none');
   }
+  vgenRenderOmniTiles();
 }
 
 // ── GPT-4 Vision: анализ референсного фото ──
@@ -2685,8 +2797,8 @@ async function vgenAnalyzeImage() {
     alert('Добавьте OpenAI API ключ в ⚙️ Настройках для анализа фото');
     return;
   }
-  const btn = document.getElementById('vgen-analyze-btn');
-  if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
+  const btns = Array.from(document.querySelectorAll('#vgen-analyze-btn, #vgen-analyze-btn-omni'));
+  btns.forEach(b => { b.textContent = '⏳'; b.disabled = true; });
   try {
     const r = await fetch('/api/analyze-image', {
       method: 'POST',
@@ -2705,13 +2817,15 @@ async function vgenAnalyzeImage() {
         setTimeout(() => promptEl.style.borderColor = 'var(--border)', 2000);
         vgenUpdateIdeaBtnState();
       }
-      if (btn) { btn.textContent = '✓ Готово'; setTimeout(() => { btn.textContent = '🔍 Анализ'; btn.disabled = false; }, 2000); }
+      btns.forEach(b => b.textContent = '✓ Готово');
+      setTimeout(() => btns.forEach(b => { b.textContent = '🔍 Анализ'; b.disabled = false; }), 2000);
     } else {
-      if (btn) { btn.textContent = '❌ Ошибка'; setTimeout(() => { btn.textContent = '🔍 Анализ'; btn.disabled = false; }, 2000); }
+      btns.forEach(b => b.textContent = '❌ Ошибка');
+      setTimeout(() => btns.forEach(b => { b.textContent = '🔍 Анализ'; b.disabled = false; }), 2000);
       alert('Ошибка анализа фото: ' + (d.error || 'неизвестно'));
     }
   } catch (e) {
-    if (btn) { btn.textContent = '🔍 Анализ'; btn.disabled = false; }
+    btns.forEach(b => { b.textContent = '🔍 Анализ'; b.disabled = false; });
     alert('Ошибка анализа фото: ' + e.message);
   }
 }
@@ -2860,14 +2974,16 @@ function wbRender() {
     div.style.cssText = 'border:1px solid var(--border);border-radius:8px;overflow:hidden;cursor:pointer;transition:border-color 0.15s;position:relative;background:var(--bg);';
     div.addEventListener('mouseover', () => div.style.borderColor = 'var(--accent)');
     div.addEventListener('mouseout', () => div.style.borderColor = 'var(--border)');
+    const placeholderIcon = p.type === 'espadent' ? '🦷' : p.type === 'custom' ? '🔧' : '🛒';
     const thumb = p.images?.[0]?.url
       ? `<img src="${p.images[0].url}" style="width:100%;height:110px;object-fit:cover;display:block;background:#1a1c2a;" loading="lazy">`
-      : `<div style="width:100%;height:110px;display:flex;align-items:center;justify-content:center;font-size:28px;background:#1a1c2a;">🔧</div>`;
+      : `<div style="width:100%;height:110px;display:flex;align-items:center;justify-content:center;font-size:28px;background:#1a1c2a;">${placeholderIcon}</div>`;
+    const subtitle = p.nmId ? 'арт. ' + p.nmId : p.type === 'espadent' ? (p.price || p.category || 'ЭспаДент') : 'своя услуга';
     div.innerHTML = `
       ${thumb}
       <div style="padding:8px;">
         <div style="font-size:11px;font-weight:600;color:var(--text);line-height:1.3;max-height:2.6em;overflow:hidden;">${wbEsc(p.name || 'Без названия')}</div>
-        <div style="font-size:10px;color:var(--text-muted);margin-top:3px;">${p.nmId ? 'арт. ' + p.nmId : 'своя услуга'}</div>
+        <div style="font-size:10px;color:var(--text-muted);margin-top:3px;">${wbEsc(subtitle)}</div>
       </div>
       <button class="wb-del-btn" style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,0.6);border:none;color:#fff;border-radius:5px;width:20px;height:20px;font-size:12px;cursor:pointer;line-height:1;">✕</button>`;
     div.querySelector('.wb-del-btn').addEventListener('click', (e) => { e.stopPropagation(); wbDelete(p.id); });
@@ -2890,6 +3006,31 @@ async function wbAddByLink() {
     const r = await fetch('/api/wb/products', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ projectId: vActiveProject, url, openaiKey })
+    });
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error);
+    input.value = '';
+    await wbLoad();
+  } catch (e) {
+    if (status) status.textContent = '✗ ' + e.message;
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '+ Добавить'; }
+  }
+}
+
+async function espadentAddByLink() {
+  const input = document.getElementById('espadent-link-input');
+  const status = document.getElementById('espadent-add-status');
+  const url = input?.value.trim();
+  if (!url) return;
+  if (!vActiveProject) { if (status) status.textContent = 'Сначала выберите проект слева'; return; }
+  const btn = document.getElementById('espadent-add-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Открываю страницу...'; }
+  if (status) status.textContent = '';
+  try {
+    const r = await fetch('/api/espadent/products', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projectId: vActiveProject, url })
     });
     const d = await r.json();
     if (!d.ok) throw new Error(d.error);
@@ -2937,7 +3078,7 @@ function vcardPopulateSelect() {
   const sel = document.getElementById('vgen-card-select');
   if (!sel) return;
   sel.innerHTML = '<option value="">— Без товара/услуги (вся история проекта) —</option>' +
-    wbProducts.map(p => `<option value="${p.id}">${wbEsc((p.type === 'custom' ? '🔧 ' : '🛒 ') + p.name)}</option>`).join('');
+    wbProducts.map(p => `<option value="${p.id}">${wbEsc((p.type === 'espadent' ? '🦷 ' : p.type === 'custom' ? '🔧 ' : '🛒 ') + p.name)}</option>`).join('');
   const saved = localStorage.getItem(vcardStorageKey());
   if (saved && wbProducts.some(p => p.id === saved)) {
     sel.value = saved;
@@ -3071,6 +3212,27 @@ function vgenShowProgress(msg) {
   area.appendChild(div);
 }
 
+function vgenOpenLightbox(url) {
+  if (!url) return;
+  const modal = document.getElementById('modal-video-lightbox');
+  const vid = document.getElementById('vgen-lightbox-video');
+  if (!modal || !vid) return;
+  vid.src = url;
+  modal.style.display = 'flex';
+}
+function vgenCloseLightbox() {
+  const modal = document.getElementById('modal-video-lightbox');
+  const vid = document.getElementById('vgen-lightbox-video');
+  if (vid) { vid.pause(); vid.src = ''; }
+  if (modal) modal.style.display = 'none';
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') vgenCloseLightbox(); });
+
+function vgenAutoGrowPrompt(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 260) + 'px';
+}
+
 function vgenAnimateProgress(pct) {
   const bar = document.getElementById('vgen-pbar');
   if (bar) bar.style.width = Math.min(pct, 95) + '%';
@@ -3104,8 +3266,9 @@ function vgenRenderResultCard(url, credits, costTime) {
   const div = document.createElement('div');
   div.className = 'vgen-result-card';
   div.innerHTML = `
-    <video controls autoplay loop src="${url}"></video>
+    <video controls autoplay loop src="${url}" ondblclick="vgenOpenLightbox('${url}')" title="Двойной клик — во весь экран"></video>
     <div class="vgen-result-actions">
+      <button onclick="vgenOpenLightbox('${url}')" style="background:none;border:1px solid var(--border);border-radius:7px;padding:7px 12px;font-size:12px;font-weight:700;color:var(--text-muted);cursor:pointer;" title="Во весь экран">⛶</button>
       <a href="${url}" download target="_blank"
         style="background:var(--accent);color:#fff;border:none;border-radius:7px;padding:7px 16px;font-size:12px;font-weight:700;cursor:pointer;text-decoration:none;">⬇ Скачать</a>
       ${credits ? `<span style="font-size:11px;color:var(--text-muted);">💎 ${credits} кредитов</span>` : ''}
@@ -4397,11 +4560,19 @@ document.addEventListener('DOMContentLoaded', () => {
       </div>
     </div>
     <!-- Footer -->
-    <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
+    <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:10px;">
       <span id="vref-count" style="font-size:12px;color:var(--text-muted);">0 изображений</span>
-      <button onclick="vrefClose()" style="background:var(--card-bg);border:1px solid var(--border);border-radius:7px;padding:7px 16px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer;">Закрыть</button>
+      <div style="display:flex;gap:8px;">
+        <button id="vref-multi-add-btn" onclick="vrefConfirmMulti()" style="display:none;background:var(--accent);color:#fff;border:none;border-radius:7px;padding:7px 16px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;">✓ Добавить выбранные</button>
+        <button onclick="vrefClose()" style="background:var(--card-bg);border:1px solid var(--border);border-radius:7px;padding:7px 16px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer;">Закрыть</button>
+      </div>
     </div>
   </div>
+</div>
+
+<!-- Video fullscreen lightbox -->
+<div id="modal-video-lightbox" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:4000;align-items:center;justify-content:center;cursor:zoom-out;" onclick="vgenCloseLightbox()">
+  <video id="vgen-lightbox-video" controls autoplay loop style="max-width:92vw;max-height:92vh;border-radius:8px;" onclick="event.stopPropagation()"></video>
 </div>
 
 <!-- WB products modal -->
@@ -4411,7 +4582,7 @@ document.addEventListener('DOMContentLoaded', () => {
     <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
       <div>
         <div style="font-size:15px;font-weight:700;color:var(--text);">🛒 Товары проекта</div>
-        <div style="font-size:12px;color:var(--text-muted);margin-top:2px;">Импорт карточки с Wildberries: фото, описание, характеристики — сохраняются в проекте</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:2px;">Импорт карточки с Wildberries или услуги с espadent.ru: фото, описание, характеристики/цены — сохраняются в проекте</div>
       </div>
       <button onclick="wbClose()" style="background:none;border:none;color:var(--text-muted);font-size:20px;cursor:pointer;line-height:1;">×</button>
     </div>
@@ -4422,6 +4593,12 @@ document.addEventListener('DOMContentLoaded', () => {
       <button onclick="wbAddCustom()" style="background:var(--card-bg);border:1px solid var(--border);color:var(--text);border-radius:7px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;" title="Под-проект без ссылки WB — для услуги или товара без карточки">+ Своя услуга</button>
     </div>
     <div id="wb-add-status" style="padding:6px 20px 0;font-size:12px;color:#ef4444;"></div>
+    <!-- Add by link (ЭспаДент) -->
+    <div style="padding:0 20px 12px;border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:center;">
+      <input id="espadent-link-input" placeholder="Ссылка на услугу espadent.ru/services/..." style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:7px;color:var(--text);padding:8px 12px;font-size:12px;outline:none;" onkeydown="if(event.key==='Enter')espadentAddByLink()">
+      <button id="espadent-add-btn" onclick="espadentAddByLink()" style="background:var(--accent);color:#fff;border:none;border-radius:7px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;">+ Добавить</button>
+    </div>
+    <div id="espadent-add-status" style="padding:6px 20px 0;font-size:12px;color:#ef4444;"></div>
     <!-- Grid -->
     <div id="wb-grid" style="flex:1;overflow-y:auto;padding:16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;">
       <div id="wb-empty" style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text-muted);font-size:13px;">

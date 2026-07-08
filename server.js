@@ -508,6 +508,120 @@ app.delete('/api/wb/products/:id', (req, res) => {
   res.json({ ok: true });
 });
 
+// ── Espadent (espadent.ru): импорт карточки услуги по ссылке — тот же принцип,
+// что и с Wildberries выше (текст + фото сохраняются в проекте как карточка), но
+// сайт на каждой странице отдаёт JS-антибот-проверку (ставит cookie, делает
+// location.reload()) — обычный fetch() с сервера видит только эту заглушку,
+// поэтому страницу открываем настоящим headless-браузером (Playwright) ──
+const ESPADENT_HOST_RE = /(^|\.)espadent\.ru$/;
+let _espadentBrowserPromise = null;
+async function espadentGetBrowser() {
+  if (!_espadentBrowserPromise) {
+    const { chromium } = require('playwright');
+    _espadentBrowserPromise = chromium.launch({ headless: true });
+  }
+  return _espadentBrowserPromise;
+}
+function espadentClean(s) {
+  return String(s || '').replace(/[ \t]{2,}/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+}
+async function espadentFetchCard(url) {
+  let u;
+  try { u = new URL(url); } catch { throw new Error('Некорректная ссылка'); }
+  if (!ESPADENT_HOST_RE.test(u.hostname)) throw new Error('Ссылка должна вести на espadent.ru');
+
+  const browser = await espadentGetBrowser();
+  const page = await browser.newPage({
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
+  });
+  try {
+    await page.goto(url, { timeout: 30000 });
+    // Сайт делает JS location.reload() сразу после первой загрузки (антибот-чек) —
+    // goto уже дожидается финальной навигации, но подстрахуемся ожиданием контента.
+    await page.waitForSelector('h1', { timeout: 20000 });
+
+    const data = await page.evaluate(() => {
+      const txt = (el) => (el ? el.innerText.trim() : '');
+      const name = txt(document.querySelector('h1'));
+      const intro = txt(document.querySelector('[class*="__text"].text-box')) || txt(document.querySelector('[class*="__text"]'));
+      const metaDesc = document.querySelector('meta[name="description"]')?.content || '';
+      const ogImage = document.querySelector('meta[property="og:image"]')?.content || '';
+      const price = txt(document.querySelector('[class*="pricebox-price"]'));
+      const doctor = txt(document.querySelector('[class*="__author"]'));
+
+      // Таблица сравнения вариантов услуги (импланты/коронки/протезы и т.п.) — верстка
+      // называется по-разному на разных категориях, но общий паттерн одинаковый:
+      // блок с классом *__item, внутри *__title (название варианта) и *__price (цена).
+      const items = [];
+      document.querySelectorAll('[class*="__item"]').forEach((el) => {
+        const title = el.querySelector('[class*="__title"]')?.innerText?.trim();
+        const priceEl = el.querySelector('[class*="__price"]')?.innerText?.trim();
+        if (title && priceEl) {
+          const extra = el.querySelector('[class*="__list"]')?.innerText?.trim() || '';
+          items.push({ title, price: priceEl, extra });
+        }
+      });
+
+      let category = '';
+      try {
+        const ld = Array.from(document.querySelectorAll('script[type="application/ld+json"]'))
+          .map((s) => { try { return JSON.parse(s.textContent); } catch { return null; } })
+          .find((j) => j && j['@graph']);
+        const bc = ld?.['@graph']?.find((g) => g['@type'] === 'BreadcrumbList');
+        category = bc?.itemListElement?.[bc.itemListElement.length - 1]?.name || '';
+      } catch {}
+
+      return { name, intro, metaDesc, ogImage, price, doctor, items, category, bodyText: document.body.innerText };
+    });
+
+    const name = espadentClean(data.name) || 'Услуга без названия';
+    const description = espadentClean(data.intro || data.metaDesc);
+    const characteristics = data.items.map((it) => ({
+      name: espadentClean(it.title),
+      value: espadentClean(it.price) + (it.extra ? ' — ' + espadentClean(it.extra).replace(/\n/g, ', ') : ''),
+    }));
+    if (data.doctor) characteristics.push({ name: 'Врач', value: espadentClean(data.doctor).replace(/\n/g, ', ') });
+    const price = espadentClean(data.price) || characteristics[0]?.value || '';
+
+    return {
+      name,
+      description,
+      characteristics,
+      price,
+      category: espadentClean(data.category),
+      images: data.ogImage ? [data.ogImage] : [],
+      rawText: espadentClean(data.bodyText).slice(0, 8000),
+      url,
+    };
+  } finally {
+    await page.close();
+  }
+}
+
+app.post('/api/espadent/products', async (req, res) => {
+  try {
+    const { projectId, url } = req.body || {};
+    if (!projectId) return res.json({ ok: false, error: 'projectId обязателен' });
+    if (!url) return res.json({ ok: false, error: 'Нужна ссылка на услугу' });
+    const fetched = await espadentFetchCard(url);
+    const images = (fetched.images || []).map((imgUrl) => ({ url: imgUrl, description: '' }));
+    const entry = {
+      id: 'espa_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+      projectId,
+      addedAt: new Date().toISOString(),
+      type: 'espadent',
+      ...fetched,
+      images,
+    };
+    const list = wbProductsRead();
+    list.unshift(entry);
+    wbProductsWrite(list);
+    res.json({ ok: true, product: entry });
+  } catch (e) {
+    res.json({ ok: false, error: e.message });
+  }
+});
+
 // ── Enhance prompt via Claude (Anthropic direct or OpenRouter) ──
 
 function buildTimeMarkers(duration) {
@@ -520,6 +634,11 @@ function buildTimeMarkers(duration) {
   return `0–4s: [opening], 4–8s: [build-up], 8–13s: [climax], 13–${d}s: [resolution/payoff]`;
 }
 
+// Голос озвучки должен звучать так, как ожидается от персонажа в кадре (возраст,
+// пол) — иначе модель нередко даёт "случайный" голос, не совпадающий с внешностью
+// (например, взрослый мужской голос у ребёнка на экране или наоборот).
+const VOICE_AGE_RULE = 'the voice/tone of any spoken dialogue or voiceover MUST match the apparent age (and gender) of the character seen speaking on screen — a child sounds like a child, a young adult sounds youthful, a middle-aged person sounds mature, an elderly person sounds older with a slower, more measured pace; if the voice actor/narrator is not the on-screen character, still match the described character\'s age.';
+
 // Голос за кадром всегда стартует на 2с и заканчивается за 1-2с до конца ролика;
 // длину текста считаем в словах под этот тайминг (естественный темп русской речи ~2-2.6 слов/с),
 // чтобы модель не писала реплику длиннее или короче отведённого окна.
@@ -529,7 +648,7 @@ function omniVoiceoverRule(segLen) {
   const speechSec = end - start;
   const wordsLo = Math.max(1, Math.round(speechSec * 2.0));
   const wordsHi = Math.max(wordsLo, Math.round(speechSec * 2.6));
-  return `AUDIO/VOICEOVER: voiceover MUST be in Russian, starting at exactly ${start}s and ending by ${end.toFixed(1)}s (1-2s before the ${segLen}s clip ends) — write it as "Голос за кадром: «...»" directly in the prompt. Keep it to ${wordsLo}-${wordsHi} Russian words total so it fits naturally at conversational pace inside that ${speechSec.toFixed(1)}s window — writing more will make it get cut off mid-sentence. Background music/SFX describe in English.`;
+  return `AUDIO/VOICEOVER: voiceover MUST be in Russian, starting at exactly ${start}s and ending by ${end.toFixed(1)}s (1-2s before the ${segLen}s clip ends) — write it as "Голос за кадром: «...»" directly in the prompt. Keep it to ${wordsLo}-${wordsHi} Russian words total so it fits naturally at conversational pace inside that ${speechSec.toFixed(1)}s window — writing more will make it get cut off mid-sentence. ${VOICE_AGE_RULE} Background music/SFX describe in English.`;
 }
 
 const ENHANCE_SYSTEM = {
@@ -548,7 +667,7 @@ Rules:
 - Use EXACT time markers for ${duration}s: ${buildTimeMarkers(duration)}
 - Use cinematic camera language: dolly, tilt, arc, crane, handheld, rack focus, whip pan (for ugc: keep it to natural handheld micro-movements only, no crane/dolly; for asmr: only slow static or micro-push-in, nothing fast)
 - Describe lighting, textures, atmosphere in vivid detail
-${format === 'ugc' ? '- The creator talks directly to camera the whole time — genuine excited reaction, casual conversational tone, like unboxing/reviewing the product for friends; end on an engaging call-to-action (e.g. "grab yours now", "link in bio", "trust me on this one")\n' : ''}${format === 'asmr' ? '- SOUND IS THE STAR: describe tactile/product sounds in vivid, specific detail (lid twisting, cream squishing, jar tapping, brush bristles) as the main focus — no voiceover, minimal or no music, let the product sounds carry the video\n' : ''}${format === 'beforeafter' ? '- Make the "before" state and the "after" state each clearly, specifically described so the contrast is unmistakable — do not describe the transformation vaguely\n' : ''}${format === 'compare' ? '- Describe both sides of the comparison with equally specific visual detail so the advantage is shown, not just claimed\n' : ''}- Add audio description LAST: ambient sounds, music tone, SFX
+${format === 'ugc' ? '- The creator talks directly to camera the whole time — genuine excited reaction, casual conversational tone, like unboxing/reviewing the product for friends; end on an engaging call-to-action (e.g. "grab yours now", "link in bio", "trust me on this one")\n' : ''}${format === 'asmr' ? '- SOUND IS THE STAR: describe tactile/product sounds in vivid, specific detail (lid twisting, cream squishing, jar tapping, brush bristles) as the main focus — no voiceover, minimal or no music, let the product sounds carry the video\n' : ''}${format === 'beforeafter' ? '- Make the "before" state and the "after" state each clearly, specifically described so the contrast is unmistakable — do not describe the transformation vaguely\n' : ''}${format === 'compare' ? '- Describe both sides of the comparison with equally specific visual detail so the advantage is shown, not just claimed\n' : ''}- Add audio description LAST: ambient sounds, music tone, SFX. If any character speaks (voiceover or on-camera dialogue), ${VOICE_AGE_RULE}
 - End with style tags: "photorealistic, 35mm film grain, ARRI ALEXA aesthetic, no 3D, no cartoon" (skip for cartoon and ugc formats — ugc should end with "shot on iPhone front camera, authentic UGC aesthetic, no cinematic grading" instead)
 - Output ONLY the prompt text in English. No explanations. No intro lines.`,
 
@@ -557,7 +676,7 @@ The video is ${duration} seconds long (Veo supports 4, 6, or 8 seconds — use c
 Rules:
 - CRITICAL: ZERO Russian or Cyrillic text allowed inside the video frame. No Russian signs, labels, subtitles, banners.
 - English infographics, charts, data visualizations ARE allowed and encouraged (especially for documentary/ad)
-- Veo generates native audio — describe the soundscape explicitly and in detail
+- Veo generates native audio — describe the soundscape explicitly and in detail. If any character speaks (voiceover or on-camera dialogue), ${VOICE_AGE_RULE}
 - Specify precise camera movement: "slow pan left", "zoom out from close-up to wide", "static locked shot", "handheld follow"
 - Fit all action into exactly ${duration} seconds — be specific about pacing
 - For format "${format}": ${
