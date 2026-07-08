@@ -1374,8 +1374,15 @@ app.post('/api/cut/upload', (req, res, next) => {
     const filePath = req.file.path;
     const size = req.file.size;
     const info = await getVideoInfo(filePath);
+    // Файл на диске всегда называется original.<ext> (см. multer filename выше) —
+    // реальное имя, которое загрузил пользователь, раньше нигде не сохранялось и
+    // терялось (библиотека показывала одно и то же "original.mp4" для всех видео).
+    // multer/busboy декодируют имя файла из multipart как latin1 по умолчанию
+    // (давний, всем известный баг этой связки библиотек) — не-ASCII имена
+    // (кириллица и т.п.) приходят битыми, если явно не перекодировать обратно в utf8.
+    info.originalName = Buffer.from(req.file.originalname, 'latin1').toString('utf8');
     try { fs.writeFileSync(path.join(path.dirname(filePath), 'video-info.json'), JSON.stringify(info)); } catch {}
-    res.json({ ok: true, projectId, videoId, filePath, duration: info.duration, size, width: info.width, height: info.height });
+    res.json({ ok: true, projectId, videoId, filePath, duration: info.duration, size, width: info.width, height: info.height, originalName: info.originalName });
   } catch (e) {
     res.json({ ok: false, error: e.message });
   }
@@ -1641,8 +1648,13 @@ app.get('/api/cut/projects/:projectId/files', (req, res) => {
       const hasTranscript = fs.existsSync(path.join(dir, 'transcript.json'));
       let clipsCount = 0;
       try { clipsCount = fs.readdirSync(path.join(dir, 'clips')).filter(f => f.endsWith('.mp4')).length; } catch {}
+      // Реальное имя загруженного файла (не "original.mp4" с диска) — сохранено при
+      // загрузке (см. /api/cut/upload); для видео, загруженных до этой доработки,
+      // просто нет и остаётся фолбэк на имя файла на диске.
+      let originalName = null;
+      try { originalName = JSON.parse(fs.readFileSync(path.join(dir, 'video-info.json'), 'utf8')).originalName || null; } catch {}
       return [{
-        videoId, filename: original, size: stat.size, mtime: stat.mtimeMs,
+        videoId, filename: originalName || original, size: stat.size, mtime: stat.mtimeMs,
         url: `/cut-files/${projectId}/videos/${videoId}/${original}`,
         hasTranscript, clipsCount,
       }];
