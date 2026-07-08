@@ -714,7 +714,13 @@
     font-weight: 700;
     display: flex; align-items: center; justify-content: center;
     flex-shrink: 0;
+    transition: background-color 0.2s, color 0.2s;
   }
+  /* Прогресс покадровой нарезки: клип готов — номер зеленеет, ошибка — краснеет */
+  .cut-list-item-num.done { background: rgba(0,201,167,0.2); color: var(--accent2); }
+  .cut-list-item-num.error { background: rgba(229,72,77,0.18); color: #e5484d; }
+  .cut-list-item-num.working { background: rgba(245,158,11,0.18); color: #f59e0b; }
+  .cut-list-item.error { border-color: rgba(229,72,77,0.35); }
   .cut-list-item-info { flex: 1; min-width: 0; }
   .cut-list-item-title { font-size: 13px; font-weight: 600; margin-bottom: 3px; }
   .cut-list-item-time { font-size: 11px; color: var(--accent); font-weight: 600; margin-bottom: 4px; }
@@ -1302,55 +1308,47 @@
       <!-- Right work area -->
       <div class="cut-work-col">
         <div class="cut-work-tabs">
-          <button class="cut-wtab-btn active" onclick="cutSwitchTab('upload', this)">1 Загрузка</button>
-          <button class="cut-wtab-btn" id="cut-tab-btn-transcribe" onclick="cutSwitchTab('transcribe', this)">2 Транскрипция</button>
-          <button class="cut-wtab-btn" id="cut-tab-btn-cuts" onclick="cutSwitchTab('cuts', this)">3 Нарезка</button>
-          <button class="cut-wtab-btn" onclick="cutSwitchTab('gallery', this); cutGalleryLoad();">4 Галерея</button>
-          <button class="cut-wtab-btn" onclick="cutSwitchTab('files', this); cutFilesLoad();">📁 Файлы</button>
+          <button class="cut-wtab-btn active" onclick="cutSwitchTab('files', this); cutFilesLoad();">📁 Файлы</button>
+          <button class="cut-wtab-btn" id="cut-tab-btn-cuts" onclick="cutSwitchTab('cuts', this)">✂️ Нарезка</button>
+          <button class="cut-wtab-btn" id="cut-tab-btn-gallery" onclick="cutSwitchTab('gallery', this); cutGalleryLoad();">🎞 Галерея</button>
         </div>
 
-        <div class="cut-wtab-panel active" id="cut-panel-upload">
+        <!-- Files library — точка входа: загрузка оригиналов, транскрипция и выбор
+             видео для нарезки живут здесь же, в карточке каждого файла. Раньше это
+             были две отдельные вкладки "Загрузка"/"Транскрипция" — но там могло быть
+             только одно видео на проект, теперь видео несколько и логичнее управлять
+             ими списком, а не линейным мастером шагов. -->
+        <div class="cut-wtab-panel active" id="cut-panel-files">
           <div id="cut-no-proj-msg" style="text-align:center;padding:40px 20px;color:var(--text-muted);">
             <div style="font-size:36px;opacity:0.3;margin-bottom:12px;">✂️</div>
             <div style="font-size:14px;">Создайте или выберите проект слева</div>
           </div>
-          <div id="cut-upload-area" style="display:none;">
-            <div class="cut-step">
-              <div class="cut-step-title"><span class="cut-step-num">1</span>Загрузите видео</div>
-              <div class="cut-drop-zone" id="cut-drop-zone"
-                ondragover="event.preventDefault();this.classList.add('drag-over')"
-                ondragleave="this.classList.remove('drag-over')"
-                ondrop="cutHandleDrop(event)"
-                onclick="document.getElementById('cut-file-input').click()">
-                <input type="file" id="cut-file-input" accept="video/mp4,video/quicktime,video/x-msvideo,video/webm,.mp4,.mov,.avi,.webm" style="display:none;" onchange="cutHandleFile(this.files[0])">
-                <div class="cut-drop-icon">🎬</div>
-                <div class="cut-drop-text">Перетащите видео или нажмите</div>
-                <div class="cut-drop-hint">MP4, MOV, AVI, WebM</div>
-              </div>
-              <div id="cut-upload-status" style="margin-top:10px;display:none;">
-                <div class="cut-status working" id="cut-upload-badge">⏳ Загрузка...</div>
-              </div>
+          <div id="cut-files-area" style="display:none;">
+            <div class="cut-drop-zone" id="cut-drop-zone" style="margin-bottom:16px;"
+              ondragover="event.preventDefault();this.classList.add('drag-over')"
+              ondragleave="this.classList.remove('drag-over')"
+              ondrop="cutHandleDrop(event)"
+              onclick="cutFilesUploadNew()">
+              <input type="file" id="cut-lib-file-input" accept="video/mp4,video/quicktime,video/x-msvideo,video/webm,.mp4,.mov,.avi,.webm" style="display:none;" onchange="cutFilesHandleNew(this.files[0])">
+              <div class="cut-drop-icon">🎬</div>
+              <div class="cut-drop-text">Перетащите видео или нажмите, чтобы добавить оригинал</div>
+              <div class="cut-drop-hint">MP4, MOV, AVI, WebM — можно загрузить сколько угодно, каждое хранится отдельно</div>
             </div>
-          </div>
-        </div>
-
-        <div class="cut-wtab-panel" id="cut-panel-transcribe">
-          <div class="cut-step">
-            <div class="cut-step-title"><span class="cut-step-num">2</span>Транскрибировать видео</div>
-            <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px;">Whisper преобразует речь в текст с временными метками. Требуется OpenAI API ключ.</p>
-            <button class="cut-btn cut-btn-primary" onclick="cutTranscribe()" id="cut-transcribe-btn">🎙 Транскрибировать</button>
-            <div id="cut-transcribe-status" style="margin-top:10px;"></div>
-            <div id="cut-transcript-box" style="margin-top:14px;display:none;">
-              <span class="cut-label">Транскрипция</span>
-              <div class="cut-transcript-box" id="cut-transcript-text"></div>
+            <div id="cut-upload-status" style="margin-bottom:16px;display:none;">
+              <div class="cut-status working" id="cut-upload-badge">⏳ Загрузка...</div>
             </div>
+            <div id="cut-files-empty" style="text-align:center;padding:60px 20px;color:var(--text-muted);">
+              <div style="font-size:36px;opacity:0.3;margin-bottom:12px;">📁</div>
+              <div>Загруженные видео появятся здесь</div>
+            </div>
+            <div id="cut-files-list" style="display:flex;flex-direction:column;gap:8px;"></div>
           </div>
         </div>
 
         <div class="cut-wtab-panel" id="cut-panel-cuts">
           <div class="cut-step">
-            <div class="cut-step-title"><span class="cut-step-num">3</span>Умная нарезка</div>
-            <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px;">AI проанализирует транскрипцию и найдёт самые интересные моменты.</p>
+            <div class="cut-step-title"><span class="cut-step-num">✂️</span>Умная нарезка</div>
+            <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px;">AI проанализирует транскрипцию и найдёт самые интересные моменты. Видео и его транскрипция выбираются во вкладке «📁 Файлы».</p>
             <button class="cut-btn cut-btn-primary" onclick="cutAnalyze()" id="cut-analyze-btn">✂️ Умная нарезка</button>
             <div id="cut-analyze-status" style="margin-top:10px;"></div>
             <div id="cut-cuts-list" style="margin-top:16px;"></div>
@@ -1367,20 +1365,6 @@
             <div>Готовые клипы появятся здесь после нарезки</div>
           </div>
           <div class="cut-gallery-grid" id="cut-gallery-grid" style="display:none;"></div>
-        </div>
-
-        <!-- Files library tab -->
-        <div class="cut-wtab-panel" id="cut-panel-files">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
-            <div style="font-size:14px;font-weight:600;">Библиотека оригиналов</div>
-            <button class="cut-btn cut-btn-primary" onclick="cutFilesUploadNew()" style="padding:5px 12px;font-size:12px;">+ Загрузить видео</button>
-          </div>
-          <input type="file" id="cut-lib-file-input" accept="video/mp4,video/quicktime,video/x-msvideo,video/webm" style="display:none;" onchange="cutFilesHandleNew(this.files[0])">
-          <div id="cut-files-empty" style="text-align:center;padding:60px 20px;color:var(--text-muted);">
-            <div style="font-size:36px;opacity:0.3;margin-bottom:12px;">📁</div>
-            <div>Загруженные видео появятся здесь</div>
-          </div>
-          <div id="cut-files-list" style="display:flex;flex-direction:column;gap:8px;"></div>
         </div>
 
       </div><!-- /cut-work-col -->
@@ -3748,6 +3732,7 @@ let cutCurrentVideoId = null; // проект теперь может содер
                                // это тот, с которым сейчас работают вкладки 1-4
 let cutCurrentCuts = [];
 let cutCurrentFormat = 'vertical';
+let cutExpandedTranscripts = new Set(); // какие карточки в "📁 Файлы" сейчас развёрнуты (не персистится)
 
 function cutProjLoad() {
   try { cutProjects = JSON.parse(localStorage.getItem(CUT_STORAGE_KEY) || '[]'); } catch { cutProjects = []; }
@@ -3792,19 +3777,14 @@ function cutMigrateProjLegacy(proj) {
 
 // Отрисовать вкладки 1-4 под конкретное видео (или под пустое состояние, если
 // videoState === null — видео ещё не выбрано/не загружено)
+// Транскрипция теперь отображается прямо в карточке файла (вкладка "📁 Файлы",
+// см. cutFilesLoad/cutFilesToggleTranscript) — здесь обновляем только инфо
+// о видео в левой панели и список точек нарезки во вкладке "✂️ Нарезка".
 function cutRenderVideoPanels(videoState) {
   if (videoState?.videoName) {
     cutShowVideoInfo(videoState.videoName, videoState.videoDur, videoState.videoSize);
   } else {
     document.getElementById('cut-video-info').style.display = 'none';
-  }
-  if (videoState?.transcript) {
-    document.getElementById('cut-transcript-text').textContent = videoState.transcript;
-    document.getElementById('cut-transcript-box').style.display = 'block';
-    document.getElementById('cut-transcribe-status').innerHTML = '<div class="cut-status done">✓ Транскрипция готова</div>';
-  } else {
-    document.getElementById('cut-transcript-box').style.display = 'none';
-    document.getElementById('cut-transcribe-status').innerHTML = '';
   }
   if (videoState?.cuts?.length) {
     cutCurrentCuts = videoState.cuts;
@@ -3820,12 +3800,10 @@ function cutRenderVideoPanels(videoState) {
 function cutProjSelect(id) {
   cutCurrentId = id;
   cutProjRender();
-  // Show upload area, hide no-proj message
+  // Show files area, hide no-proj message
   document.getElementById('cut-no-proj-msg').style.display = 'none';
-  document.getElementById('cut-upload-area').style.display = 'block';
-  // Reset upload status
+  document.getElementById('cut-files-area').style.display = 'block';
   document.getElementById('cut-upload-status').style.display = 'none';
-  document.getElementById('cut-drop-zone').style.display = 'flex';
 
   const proj = cutGetProj();
   if (proj) cutMigrateProjLegacy(proj);
@@ -3838,6 +3816,7 @@ function cutProjSelect(id) {
     cutProjSave();
   }
   cutRenderVideoPanels(cutCurrentVideoId ? proj.videos[cutCurrentVideoId] : null);
+  cutFilesLoad();
 }
 function cutProjRename(id) {
   const proj = cutProjects.find(p => p.id === id);
@@ -3872,8 +3851,9 @@ function cutProjDelete(id) {
   cutProjSave();
   if (cutCurrentId === id) {
     cutCurrentId = null;
+    cutCurrentVideoId = null;
     document.getElementById('cut-no-proj-msg').style.display = 'block';
-    document.getElementById('cut-upload-area').style.display = 'none';
+    document.getElementById('cut-files-area').style.display = 'none';
     document.getElementById('cut-video-info').style.display = 'none';
   }
   cutProjRender();
@@ -3902,23 +3882,111 @@ async function cutFilesLoad() {
     const sizeMb = (f.size / 1024 / 1024).toFixed(1);
     const date = new Date(f.mtime).toLocaleDateString('ru');
     const active = f.videoId === cutCurrentVideoId;
+    const expanded = cutExpandedTranscripts.has(f.videoId);
     const badges = [
       f.hasTranscript ? '✓ транскрипция' : null,
       f.clipsCount ? `🎬 ${f.clipsCount} клип${f.clipsCount === 1 ? '' : f.clipsCount < 5 ? 'а' : 'ов'}` : null,
     ].filter(Boolean).join(' · ');
-    return `<div style="background:var(--card-bg);border:1px solid ${active ? 'var(--accent)' : 'var(--border)'};border-radius:8px;padding:12px 14px;display:flex;align-items:center;gap:12px;">
-      <div style="font-size:28px;opacity:0.6;">🎬</div>
-      <div style="flex:1;min-width:0;">
-        <div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${f.filename}${active ? ' <span style="color:var(--accent);font-weight:400;">· активно</span>' : ''}</div>
-        <div style="font-size:11px;color:var(--text-muted);margin-top:3px;">${sizeMb} МБ · ${date}${badges ? ' · ' + badges : ''}</div>
+    const fnEsc = f.filename.replace(/'/g, "\\'");
+    return `<div style="background:var(--card-bg);border:1px solid ${active ? 'var(--accent)' : 'var(--border)'};border-radius:8px;padding:12px 14px;">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div style="font-size:28px;opacity:0.6;">🎬</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${f.filename}${active ? ' <span style="color:var(--accent);font-weight:400;">· активно</span>' : ''}</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:3px;">${sizeMb} МБ · ${date}${badges ? ' · ' + badges : ''}</div>
+        </div>
+        <div style="display:flex;gap:6px;flex-shrink:0;">
+          <a href="${f.url}" download="${f.filename}" style="padding:5px 10px;background:var(--card-bg);border:1px solid var(--border);border-radius:6px;font-size:11px;color:var(--text-muted);text-decoration:none;cursor:pointer;" title="Скачать">⬇️</a>
+          <button onclick="cutFilesSelectVideo('${f.videoId}','${fnEsc}',${f.size})" style="padding:5px 10px;background:rgba(108,99,255,0.15);border:1px solid rgba(108,99,255,0.3);border-radius:6px;font-size:11px;color:var(--accent);cursor:pointer;" title="Работать с этим видео (нарезка)" ${active ? 'disabled' : ''}>✂️ Нарезать</button>
+          <button onclick="cutFilesDeleteVideo('${f.videoId}')" style="padding:5px 8px;background:var(--card-bg);border:1px solid var(--border);border-radius:6px;font-size:11px;color:var(--text-muted);cursor:pointer;" title="Удалить видео из проекта">✕</button>
+        </div>
       </div>
-      <div style="display:flex;gap:6px;">
-        <a href="${f.url}" download="${f.filename}" style="padding:5px 10px;background:var(--card-bg);border:1px solid var(--border);border-radius:6px;font-size:11px;color:var(--text-muted);text-decoration:none;cursor:pointer;" title="Скачать">⬇️</a>
-        <button onclick="cutFilesSelectVideo('${f.videoId}','${f.filename.replace(/'/g, "\\'")}',${f.size})" style="padding:5px 10px;background:rgba(108,99,255,0.15);border:1px solid rgba(108,99,255,0.3);border-radius:6px;font-size:11px;color:var(--accent);cursor:pointer;" title="Работать с этим видео (транскрипция/нарезка)" ${active ? 'disabled' : ''}>✂️ Нарезать</button>
-        <button onclick="cutFilesDeleteVideo('${f.videoId}')" style="padding:5px 8px;background:var(--card-bg);border:1px solid var(--border);border-radius:6px;font-size:11px;color:var(--text-muted);cursor:pointer;" title="Удалить видео из проекта">✕</button>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);">
+        <button id="cut-transcribe-btn-${f.videoId}" onclick="cutFilesTranscribeOne('${f.videoId}')" style="padding:4px 10px;background:var(--card-bg);border:1px solid var(--border);border-radius:6px;font-size:11px;color:var(--text);cursor:pointer;">🎙 ${f.hasTranscript ? 'Перетранскрибировать' : 'Транскрибировать'}</button>
+        ${f.hasTranscript ? `<button onclick="cutFilesToggleTranscript('${f.videoId}')" style="padding:4px 10px;background:none;border:1px solid var(--border);border-radius:6px;font-size:11px;color:var(--text-muted);cursor:pointer;">${expanded ? '▲ Скрыть' : '▼ Показать'} транскрипцию</button>` : ''}
+        <div id="cut-transcribe-status-${f.videoId}" style="font-size:11px;"></div>
+      </div>
+      <div id="cut-transcript-inline-${f.videoId}" style="display:${expanded ? 'block' : 'none'};margin-top:8px;">
+        <div class="cut-transcript-box" id="cut-transcript-text-${f.videoId}">⏳ Загрузка...</div>
       </div>
     </div>`;
   }).join('');
+  // Дозагрузить текст транскрипции для уже развёрнутых карточек (например, после
+  // обновления списка не должно "схлопывать" то, что пользователь уже открыл)
+  d.files.filter(f => cutExpandedTranscripts.has(f.videoId)).forEach(f => cutFilesFillTranscript(f.videoId));
+}
+
+// Показать/скрыть транскрипцию прямо в карточке файла — хранится на сервере
+// (см. /videos/:videoId/state), поэтому доступна и после перезагрузки страницы,
+// и в другом браузере — именно это и означает "можно вернуться".
+function cutFilesToggleTranscript(videoId) {
+  const box = document.getElementById('cut-transcript-inline-' + videoId);
+  if (!box) return;
+  const nowExpanded = box.style.display === 'none';
+  box.style.display = nowExpanded ? 'block' : 'none';
+  if (nowExpanded) { cutExpandedTranscripts.add(videoId); cutFilesFillTranscript(videoId); }
+  else cutExpandedTranscripts.delete(videoId);
+  cutFilesLoad(); // обновить текст кнопки-переключателя (▲/▼)
+}
+
+async function cutFilesFillTranscript(videoId) {
+  const proj = cutGetProj();
+  const cached = proj?.videos?.[videoId]?.transcript;
+  const el = document.getElementById('cut-transcript-text-' + videoId);
+  if (!el) return;
+  if (cached) { el.textContent = cached; return; }
+  try {
+    const r = await fetch(`/api/cut/projects/${cutCurrentId}/videos/${videoId}/state`);
+    const d = await r.json();
+    if (d.ok && d.transcript) {
+      el.textContent = d.transcript;
+      if (proj) {
+        cutMigrateProjLegacy(proj);
+        if (!proj.videos[videoId]) proj.videos[videoId] = {};
+        proj.videos[videoId].transcript = d.transcript;
+        proj.videos[videoId].segments = d.segments;
+        cutProjSave();
+      }
+    } else {
+      el.textContent = 'Транскрипция не найдена.';
+    }
+  } catch (e) {
+    el.textContent = 'Ошибка загрузки: ' + e.message;
+  }
+}
+
+// Транскрибировать КОНКРЕТНОЕ видео прямо из карточки — не требует, чтобы оно
+// было "активным" (выбранным для нарезки). Кнопка стоит рядом с "Удалить".
+async function cutFilesTranscribeOne(videoId) {
+  const openaiKey = localStorage.getItem('openai_api_key') || '';
+  if (!openaiKey) return alert('Добавьте OpenAI API ключ в настройках ⚙️');
+  const btn = document.getElementById('cut-transcribe-btn-' + videoId);
+  const statusEl = document.getElementById('cut-transcribe-status-' + videoId);
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Транскрибирую...'; }
+  if (statusEl) statusEl.innerHTML = '<span style="color:var(--text-muted);">⏳ Отправка в Whisper API (может занять минуту-другую на длинном видео)...</span>';
+  try {
+    const r = await fetch('/api/cut/transcribe', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projectId: cutCurrentId, videoId, openaiKey }),
+    });
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error);
+    cutProjLoad();
+    const proj = cutProjects.find(p => p.id === cutCurrentId);
+    if (proj) {
+      cutMigrateProjLegacy(proj);
+      if (!proj.videos[videoId]) proj.videos[videoId] = {};
+      proj.videos[videoId].transcript = d.transcript;
+      proj.videos[videoId].segments = d.segments;
+      cutProjSave();
+    }
+    cutExpandedTranscripts.add(videoId);
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--accent2);">✓ Готово</span>';
+  } catch (e) {
+    if (statusEl) statusEl.innerHTML = '<span style="color:#e5484d;">✗ ' + e.message + '</span>';
+  } finally {
+    await cutFilesLoad();
+  }
 }
 
 function cutFilesUploadNew() {
@@ -3951,9 +4019,7 @@ async function cutFilesSelectVideo(videoId, filename, size) {
   if (!proj.videos[videoId].videoSize && size) proj.videos[videoId].videoSize = size;
   cutProjSave();
 
-  cutSwitchTab('upload', document.querySelector('.cut-wtab-btn'));
-  document.getElementById('cut-no-proj-msg').style.display = 'none';
-  document.getElementById('cut-upload-area').style.display = 'block';
+  cutSwitchTab('cuts', document.getElementById('cut-tab-btn-cuts'));
 
   cutRenderVideoPanels(proj.videos[videoId]);
   try {
@@ -4075,10 +4141,7 @@ function cutHandleDrop(ev) {
   ev.preventDefault();
   document.getElementById('cut-drop-zone').classList.remove('drag-over');
   const file = ev.dataTransfer.files[0];
-  if (file) cutUploadVideo(file);
-}
-function cutHandleFile(file) {
-  if (file) cutUploadVideo(file);
+  if (file) cutFilesHandleNew(file);
 }
 
 async function cutUploadVideo(file) {
@@ -4119,50 +4182,6 @@ async function cutUploadVideo(file) {
   } catch (e) {
     badge.className = 'cut-status error';
     badge.textContent = '✗ ' + e.message;
-  }
-}
-
-async function cutTranscribe() {
-  if (!cutCurrentId) return alert('Нет активного проекта');
-  if (!cutCurrentVideoId) return alert('Сначала загрузите или выберите видео');
-  const openaiKey = localStorage.getItem('openai_api_key') || '';
-  if (!openaiKey) return alert('Добавьте OpenAI API ключ в настройках ⚙️');
-
-  const btn = document.getElementById('cut-transcribe-btn');
-  const statusEl = document.getElementById('cut-transcribe-status');
-  btn.disabled = true;
-  btn.textContent = '⏳ Транскрибирование...';
-  statusEl.innerHTML = '<div class="cut-status working">⏳ Отправка в Whisper API...</div>';
-  document.getElementById('cut-transcript-box').style.display = 'none';
-
-  try {
-    const r = await fetch('/api/cut/transcribe', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ projectId: cutCurrentId, videoId: cutCurrentVideoId, openaiKey }),
-    });
-    const d = await r.json();
-    if (!d.ok) throw new Error(d.error);
-
-    statusEl.innerHTML = '<div class="cut-status done">✓ Транскрипция готова</div>';
-    document.getElementById('cut-transcript-text').textContent = d.transcript;
-    document.getElementById('cut-transcript-box').style.display = 'block';
-
-    // Save transcript into this video's slot
-    cutProjLoad();
-    const proj = cutProjects.find(p => p.id === cutCurrentId);
-    if (proj) {
-      cutMigrateProjLegacy(proj);
-      if (!proj.videos[cutCurrentVideoId]) proj.videos[cutCurrentVideoId] = {};
-      proj.videos[cutCurrentVideoId].transcript = d.transcript;
-      proj.videos[cutCurrentVideoId].segments = d.segments;
-      cutProjSave();
-    }
-  } catch (e) {
-    statusEl.innerHTML = '<div class="cut-status error">✗ ' + e.message + '</div>';
-  } finally {
-    btn.disabled = false;
-    btn.textContent = '🎙 Транскрибировать';
   }
 }
 
@@ -4218,43 +4237,76 @@ async function cutAnalyze() {
   }
 }
 
-function cutRenderCutsList(cuts) {
+// statusByIndex: { [i]: 'working'|'done'|'error' } — подсветка прогресса покадровой
+// нарезки (см. cutExecute). Без аргумента — обычный вид (до начала нарезки).
+function cutRenderCutsList(cuts, statusByIndex) {
   const el = document.getElementById('cut-cuts-list');
-  el.innerHTML = cuts.map((c, i) => `
-    <div class="cut-list-item">
-      <div class="cut-list-item-num">${i + 1}</div>
+  el.innerHTML = cuts.map((c, i) => {
+    const st = statusByIndex?.[i];
+    return `
+    <div class="cut-list-item${st === 'error' ? ' error' : ''}">
+      <div class="cut-list-item-num${st ? ' ' + st : ''}">${st === 'done' ? '✓' : st === 'error' ? '✕' : i + 1}</div>
       <div class="cut-list-item-info">
         <div class="cut-list-item-title">${c.title || 'Клип ' + (i+1)}</div>
         <div class="cut-list-item-time">⏱ ${cutFmtDur(c.start)} → ${cutFmtDur(c.end)} (${cutFmtDur(c.end - c.start)})</div>
-        <div class="cut-list-item-desc">${c.description || ''}</div>
+        <div class="cut-list-item-desc">${st === 'error' ? '<span style="color:#e5484d;">' + (c._error || 'Ошибка нарезки') + '</span>' : (c.description || '')}</div>
       </div>
     </div>
-  `).join('');
+  `;
+  }).join('');
 }
 
+// Режет клипы ПО ОДНОМУ (не одним общим запросом на всю пачку) — так видно,
+// какой клип уже готов (номер зеленеет), какой ещё в процессе, и какой конкретно
+// не удался (например, точка нарезки вышла за пределы видео из-за устаревшей
+// транскрипции — сервер теперь явно отклоняет такие клипы, а не отдаёт молча пустой файл).
 async function cutExecute() {
   if (!cutCurrentId || !cutCurrentCuts.length) return;
   if (!cutCurrentVideoId) return alert('Сначала загрузите или выберите видео');
   const btn = document.getElementById('cut-execute-btn');
   const statusEl = document.getElementById('cut-execute-status');
   btn.disabled = true;
-  btn.textContent = '⏳ Нарезаю...';
-  statusEl.innerHTML = '<div class="cut-status working">⏳ FFmpeg нарезает клипы...</div>';
+
+  const statusByIndex = {};
+  let okCount = 0, errCount = 0;
+  for (let i = 0; i < cutCurrentCuts.length; i++) {
+    statusByIndex[i] = 'working';
+    btn.textContent = `⏳ Нарезаю ${i + 1} из ${cutCurrentCuts.length}...`;
+    statusEl.innerHTML = `<div class="cut-status working">⏳ FFmpeg нарезает клип ${i + 1} из ${cutCurrentCuts.length}...</div>`;
+    cutRenderCutsList(cutCurrentCuts, statusByIndex);
+    try {
+      const r = await fetch('/api/cut/execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectId: cutCurrentId, videoId: cutCurrentVideoId,
+          cut: cutCurrentCuts[i], index: i,
+          format: cutCurrentFormat, smartCrop: cutCurrentSmartCrop,
+        }),
+      });
+      const d = await r.json();
+      if (!d.ok) throw new Error(d.error);
+      statusByIndex[i] = 'done';
+      okCount++;
+    } catch (e) {
+      statusByIndex[i] = 'error';
+      cutCurrentCuts[i]._error = e.message;
+      errCount++;
+    }
+    cutRenderCutsList(cutCurrentCuts, statusByIndex);
+  }
 
   try {
-    const r = await fetch('/api/cut/execute', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ projectId: cutCurrentId, videoId: cutCurrentVideoId, cuts: cutCurrentCuts, format: cutCurrentFormat, smartCrop: cutCurrentSmartCrop }),
-    });
-    const d = await r.json();
-    if (!d.ok) throw new Error(d.error);
-    statusEl.innerHTML = '<div class="cut-status done">✓ Готово! ' + d.clips.length + ' клипов нарезано</div>';
-    // Switch to gallery
-    setTimeout(() => {
-      cutSwitchTab('gallery', document.querySelectorAll('.cut-wtab-btn')[3]);
-      cutGalleryLoad();
-    }, 800);
+    statusEl.innerHTML = errCount
+      ? `<div class="cut-status error">⚠ Готово ${okCount} из ${cutCurrentCuts.length}, ${errCount} с ошибкой (см. список выше)</div>`
+      : `<div class="cut-status done">✓ Готово! ${okCount} клипов нарезано</div>`;
+    // Switch to gallery (если хоть что-то нарезалось)
+    if (okCount) {
+      setTimeout(() => {
+        cutSwitchTab('gallery', document.getElementById('cut-tab-btn-gallery'));
+        cutGalleryLoad();
+      }, 800);
+    }
   } catch (e) {
     statusEl.innerHTML = '<div class="cut-status error">✗ ' + e.message + '</div>';
   } finally {

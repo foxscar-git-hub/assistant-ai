@@ -1396,9 +1396,18 @@ app.post('/api/cut/transcribe', async (req, res) => {
     const videoPath = path.join(dir, files[0]);
 
     // Extract compressed mono audio: video can exceed Node's 2 GiB buffer limit,
-    // and Whisper API accepts max 25 MB anyway
+    // and Whisper API accepts max 25 MB anyway.
+    // Реальный случай: под старым (одно-видео-на-проект) хранилищем видео заменяли,
+    // но whisper-audio.mp3 от ПРЕДЫДУЩЕГО ролика оставался на диске — проверка "уже
+    // есть файл, значит не извлекаем заново" считала его валидным, и транскрипция
+    // получалась от другого, более длинного видео (точки нарезки уходили за пределы
+    // текущего ролика, ffmpeg молча отдавал пустые клипы). Теперь каждый videoId — своя
+    // неизменяемая папка, так что этого не должно повториться, но на всякий случай
+    // сверяем mtime: если original.* новее уже извлечённого аудио — извлекаем заново.
     const audioPath = path.join(dir, 'whisper-audio.mp3');
-    if (!fs.existsSync(audioPath)) {
+    const videoMtime = fs.statSync(videoPath).mtimeMs;
+    const audioStale = !fs.existsSync(audioPath) || fs.statSync(audioPath).mtimeMs < videoMtime;
+    if (audioStale) {
       await ffmpegExec(['-y', '-i', videoPath, '-vn', '-ac', '1', '-ar', '16000', '-b:a', '32k', audioPath]);
     }
     const audioSize = fs.statSync(audioPath).size;
@@ -1510,16 +1519,39 @@ Rules:
 });
 
 // POST /api/cut/execute
+// Режет ОДИН клип за вызов (раньше резал все cuts разом одним запросом) — так
+// клиент может показывать прогресс по каждому клипу (подсветка "готово" сразу
+// после каждого, а не одно общее "нарезаю..." на всю пачку).
 app.post('/api/cut/execute', async (req, res) => {
   try {
-    const { projectId, videoId, cuts, format = 'vertical', smartCrop = null } = req.body || {};
-    if (!projectId || !cuts?.length) return res.json({ ok: false, error: 'projectId и cuts обязательны' });
-    if (!videoId) return res.json({ ok: false, error: 'videoId обязателен' });
+    const { projectId, videoId, cut, index, format = 'vertical', smartCrop = null } = req.body || {};
+    if (!projectId || !videoId || !cut || index === undefined) {
+      return res.json({ ok: false, error: 'projectId, videoId, cut и index обязательны' });
+    }
 
     const dir = cutVideoDir(projectId, videoId);
     const files = fs.existsSync(dir) ? fs.readdirSync(dir).filter(f => f.startsWith('original.')) : [];
     if (!files.length) return res.json({ ok: false, error: 'Видео не найдено' });
     const videoPath = path.join(dir, files[0]);
+
+    const start = parseFloat(cut.start);
+    const end = parseFloat(cut.end);
+    const duration = end - start;
+    if (!(duration > 0)) return res.json({ ok: false, error: 'Некорректный тайм-код клипа' });
+
+    // Реальный случай: протухшая транскрипция (от старого видео, см. /transcribe)
+    // предлагала точки нарезки ЗА ПРЕДЕЛАМИ текущего ролика — ffmpeg на такой -ss
+    // молча отдавал пустой 0-секундный файл, и это было видно только по факту в
+    // галерее. Теперь сверяем с реальной длительностью (video-info.json) и сразу
+    // возвращаем понятную ошибку вместо тихого пустого клипа.
+    let realDuration = null;
+    try { realDuration = JSON.parse(fs.readFileSync(path.join(dir, 'video-info.json'), 'utf8')).duration; } catch {}
+    if (realDuration && start >= realDuration) {
+      return res.json({
+        ok: false,
+        error: `Начало клипа (${start.toFixed(1)}с) выходит за пределы видео (${realDuration.toFixed(1)}с) — транскрипция могла устареть. Перетранскрибируйте видео и повторите умную нарезку.`,
+      });
+    }
 
     const clipsDir = path.join(dir, 'clips');
     fs.mkdirSync(clipsDir, { recursive: true });
@@ -1540,42 +1572,33 @@ app.post('/api/cut/execute', async (req, res) => {
         + `[bg][fg]overlay=(W-w)/2:(H-h)/2`
       : null;
 
-    const resultClips = [];
-    for (let i = 0; i < cuts.length; i++) {
-      const cut = cuts[i];
-      const outPath = path.join(clipsDir, `clip_${i + 1}.mp4`);
-      const start = parseFloat(cut.start);
-      const end = parseFloat(cut.end);
-      const duration = end - start;
-      if (duration <= 0) continue;
+    const outPath = path.join(clipsDir, `clip_${index + 1}.mp4`);
+    await ffmpegExec([
+      '-ss', String(start),
+      '-i', videoPath,
+      '-t', String(duration),
+      ...(useSmart ? ['-filter_complex', smartFilter] : ['-vf', vfFilter]),
+      '-c:v', 'libx264',
+      '-preset', 'fast',
+      '-crf', '23',
+      '-c:a', 'aac',
+      '-b:a', '128k',
+      '-movflags', '+faststart',
+      '-y',
+      outPath,
+    ]);
 
-      await ffmpegExec([
-        '-ss', String(start),
-        '-i', videoPath,
-        '-t', String(duration),
-        ...(useSmart ? ['-filter_complex', smartFilter] : ['-vf', vfFilter]),
-        '-c:v', 'libx264',
-        '-preset', 'fast',
-        '-crf', '23',
-        '-c:a', 'aac',
-        '-b:a', '128k',
-        '-movflags', '+faststart',
-        '-y',
-        outPath,
-      ]);
+    const url = `/cut-files/${projectId}/videos/${videoId}/clips/clip_${index + 1}.mp4`;
+    const clip = { path: outPath, url, title: cut.title || `Клип ${index + 1}` };
 
-      const url = `/cut-files/${projectId}/videos/${videoId}/clips/clip_${i + 1}.mp4`;
-      resultClips.push({ path: outPath, url, title: cut.title || `Клип ${i + 1}` });
-    }
-
-    // Save clip titles so the gallery can show meaningful names
+    // Save clip title so the gallery can show a meaningful name
     const metaPath = path.join(clipsDir, 'meta.json');
     let meta = {};
     try { meta = JSON.parse(fs.readFileSync(metaPath, 'utf8')); } catch {}
-    resultClips.forEach(c => { meta[path.basename(c.path)] = c.title; });
+    meta[path.basename(outPath)] = clip.title;
     fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2));
 
-    res.json({ ok: true, clips: resultClips });
+    res.json({ ok: true, clip });
   } catch (e) {
     res.json({ ok: false, error: e.message });
   }
