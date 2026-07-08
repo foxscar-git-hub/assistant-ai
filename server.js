@@ -548,6 +548,12 @@ async function espadentFetchCard(url) {
       const ogImage = document.querySelector('meta[property="og:image"]')?.content || '';
       const price = txt(document.querySelector('[class*="pricebox-price"]'));
       const doctor = txt(document.querySelector('[class*="__author"]'));
+      // Реальный телефон сайта — берём из tel:-ссылки (надёжнее регулярки по тексту,
+      // не путает с другими числами на странице). ВНИМАНИЕ: сайт использует
+      // коллтрекинг — номер в tel:-ссылке может отличаться при разных заходах
+      // (подмена под источник трафика), поэтому это "номер на момент импорта",
+      // а не гарантированно единственный постоянный номер клиники.
+      const phone = document.querySelector('a[href^="tel:"]')?.getAttribute('href')?.replace(/^tel:/, '').trim() || '';
 
       // Таблица сравнения вариантов услуги (импланты/коронки/протезы и т.п.) — верстка
       // называется по-разному на разных категориях, но общий паттерн одинаковый:
@@ -571,7 +577,7 @@ async function espadentFetchCard(url) {
         category = bc?.itemListElement?.[bc.itemListElement.length - 1]?.name || '';
       } catch {}
 
-      return { name, intro, metaDesc, ogImage, price, doctor, items, category, bodyText: document.body.innerText };
+      return { name, intro, metaDesc, ogImage, price, doctor, phone, items, category, bodyText: document.body.innerText };
     });
 
     const name = espadentClean(data.name) || 'Услуга без названия';
@@ -581,6 +587,11 @@ async function espadentFetchCard(url) {
       value: espadentClean(it.price) + (it.extra ? ' — ' + espadentClean(it.extra).replace(/\n/g, ', ') : ''),
     }));
     if (data.doctor) characteristics.push({ name: 'Врач', value: espadentClean(data.doctor).replace(/\n/g, ', ') });
+    // Телефон — отдельная характеристика, а не просто текст в описании: enhance-prompt
+    // и generate-idea требуют использовать ТОЛЬКО этот номер, если в ролике вообще
+    // упоминается телефон, а не давать модели придумать/додумать свой.
+    const phone = espadentClean(data.phone);
+    if (phone) characteristics.push({ name: 'Телефон', value: phone });
     const price = espadentClean(data.price) || characteristics[0]?.value || '';
 
     return {
@@ -798,8 +809,9 @@ app.post('/api/generate-idea', async (req, res) => {
     const detailsLine = (productDescription || productCharacteristics)
       ? `\nОписание: ${productDescription.slice(0, 500)}${productCharacteristics ? '\nХарактеристики/цены: ' + productCharacteristics.slice(0, 500) : ''}${productRawText ? '\nДоп. текст со страницы услуги: ' + productRawText.slice(0, 1200) : ''}`
       : '';
+    const servicePhoneMatch = productCharacteristics.match(/Телефон:\s*([^;]+)/i);
     const serviceLine = isService && productName
-      ? `\nЭто конкретная услуга клиники — идея ДОЛЖНА явно называть именно эту услугу ("${productName}") в озвучке/диалоге персонажа, а не быть общим роликом про клинику/стоматологию вообще.`
+      ? `\nЭто конкретная услуга клиники — идея ДОЛЖНА явно называть именно эту услугу ("${productName}") в озвучке/диалоге персонажа, а не быть общим роликом про клинику/стоматологию вообще.${servicePhoneMatch ? ` Если в идее упоминается номер телефона — это ДОЛЖЕН быть именно "${servicePhoneMatch[1].trim()}", без выдумывания другого номера.` : ''}`
       : '';
     const userMsg = `Товар: ${productName ? productName : 'товар (конкретное название не указано — придумай под универсальный потребительский продукт)'}${detailsLine}${serviceLine}
 Формат ролика: ${formatName}
@@ -882,8 +894,13 @@ app.post('/api/enhance-prompt', async (req, res) => {
     const isServiceRef = !!productMatch && /^service$/i.test(productMatch[1]);
     const refBody = productMatch ? productMatch[2].trim() : '';
     const serviceName = isServiceRef ? refBody.split('.')[0].trim() : '';
+    // Реальный телефон сайта попадает в characteristics как "Телефон: ..." (см.
+    // espadentFetchCard) — вытаскиваем его отдельно, чтобы явно запретить модели
+    // изобретать/додумывать номер, если в ролике вообще есть телефон в кадре/озвучке.
+    const phoneMatch = refBody.match(/Телефон:\s*([^;\]]+)/i);
+    const servicePhone = phoneMatch ? phoneMatch[1].trim() : '';
     const productNote = productMatch
-      ? `\n\nEXACT ${isServiceRef ? 'SERVICE' : 'PRODUCT'} DETAILS (from ${isServiceRef ? 'the service card' : 'photo analysis or product card'}) — these specifics MUST be preserved precisely in the rewritten prompt, do not generalize, paraphrase away, or drop any of them (colors, text/logos, materials, shape, packaging):\n"${refBody}"${isServiceRef ? `\n\nCRITICAL: this video advertises this EXACT named service — the voiceover/spoken dialogue MUST explicitly name it in Russian somewhere in the line (mention "${serviceName}" naturally as part of what the speaker says), not just describe generic dental imagery. Do not make a generic dental-clinic ad — tie it to this specific service by name.` : ''}`
+      ? `\n\nEXACT ${isServiceRef ? 'SERVICE' : 'PRODUCT'} DETAILS (from ${isServiceRef ? 'the service card' : 'photo analysis or product card'}) — these specifics MUST be preserved precisely in the rewritten prompt, do not generalize, paraphrase away, or drop any of them (colors, text/logos, materials, shape, packaging):\n"${refBody}"${isServiceRef ? `\n\nCRITICAL: this video advertises this EXACT named service — the voiceover/spoken dialogue MUST explicitly name it in Russian somewhere in the line (mention "${serviceName}" naturally as part of what the speaker says), not just describe generic dental imagery. Do not make a generic dental-clinic ad — tie it to this specific service by name.${servicePhone ? ` If the video shows or mentions a phone number (on-screen text or voiceover), it MUST be exactly this real number: "${servicePhone}" — never invent a different number, alter its format, or use a placeholder like "8-800-XXX-XX-XX".` : ' Do not invent or show any phone number — none was provided for this service.'}` : ''}`
       : '';
 
     const userMsg = `Original idea (may be in Russian or any language): "${prompt}"
