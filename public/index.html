@@ -2537,7 +2537,7 @@ const FORMAT_CONTEXT = {
 // "🔍 Анализ" заново при каждом выборе фото — быстрее и не тратит запросы повторно.
 function vgenAutoInjectRefDescription() {
   const promptEl = document.getElementById('vgen-prompt');
-  if (!promptEl || /\[PRODUCT REFERENCE:/i.test(promptEl.value)) return;
+  if (!promptEl || /\[(PRODUCT|SERVICE) REFERENCE:/i.test(promptEl.value)) return;
   const descs = [vgenState.firstImageUrl, vgenState.lastImageUrl]
     .filter(Boolean)
     .map(u => vgenGetImageDescription(u))
@@ -2626,7 +2626,14 @@ async function vgenGenerateIdea() {
   const model = vgenActiveModel || 'seedance';
   const format = document.querySelector('input[name="vgen-format"]:checked')?.value || 'cinematic';
   const dur = vgenGetParam('vgen-dur') || '5';
-  const productName = wbProducts.find(p => p.id === vActiveCardId)?.name || '';
+  const activeCard = wbProducts.find(p => p.id === vActiveCardId);
+  const productName = activeCard?.name || '';
+  const productDescription = activeCard?.description || '';
+  const productCharacteristics = (activeCard?.characteristics || []).map(c => `${c.name}: ${c.value}`).join('; ');
+  const isService = activeCard?.type === 'espadent';
+  // rawText для страниц услуг — это весь document.body.innerText (шапка/меню/список
+  // врачей), полезен только когда нет таблицы характеристик (т.е. это статья, а не услуга)
+  const productRawText = isService && !productCharacteristics && activeCard?.rawText ? activeCard.rawText.slice(0, 1200) : '';
 
   const anthropicKey  = localStorage.getItem('anthropic_api_key') || '';
   const openrouterKey = localStorage.getItem('openrouter_api_key') || '';
@@ -2644,7 +2651,7 @@ async function vgenGenerateIdea() {
     if (openrouterKey) headers['x-openrouter-key'] = openrouterKey;
     const r = await fetch('/api/generate-idea', {
       method: 'POST', headers,
-      body: JSON.stringify({ model, format, duration: dur, productName }),
+      body: JSON.stringify({ model, format, duration: dur, productName, productDescription, productCharacteristics, isService, productRawText }),
     });
     if (!r.ok) throw new Error('Сервер вернул ошибку (HTTP ' + r.status + ') — попробуйте ещё раз');
     const d = await r.json();
@@ -3122,7 +3129,21 @@ function vcardActivate(p) {
   if (promptEl && (p.description || p.characteristics?.length)) {
     const chars = (p.characteristics || []).map(c => `${c.name}: ${c.value}`).join('; ');
     const desc = (p.description || '').slice(0, 500);
-    const tag = `\n\n[PRODUCT REFERENCE: ${p.name}. ${desc}${chars ? ' Характеристики: ' + chars : ''}]`;
+    // Карточки услуг (espadent) помечаются отдельно — на сервере это триггерит
+    // требование явно назвать услугу в озвучке, а не только сохранить детали.
+    // rawText (полный текст страницы услуги/статьи) сохраняется при импорте, но
+    // description/characteristics не всегда покрывают его целиком (особенно для
+    // страниц-статей — там description это просто SEO-сниппет) — добавляем кусок
+    // rawText отдельно, чтобы спарсенный текст не лежал неиспользуемым.
+    const isServiceType = p.type === 'espadent';
+    // Для страниц услуг (есть таблица цен → chars уже заполнен) rawText — это весь
+    // document.body.innerText целиком, включая шапку/меню/список врачей клиники —
+    // первые ~1200 символов там сплошной шум, description+chars и так покрывают суть.
+    // Для статей (chars пуст, таблицы цен нет) rawText — чистый текст статьи, вот там
+    // он действительно единственный источник содержательного текста.
+    const rawExcerpt = isServiceType && !chars && p.rawText ? p.rawText.slice(0, 1200) : '';
+    const refLabel = isServiceType ? 'SERVICE REFERENCE' : 'PRODUCT REFERENCE';
+    const tag = `\n\n[${refLabel}: ${p.name}. ${desc}${chars ? ' Характеристики: ' + chars : ''}${rawExcerpt ? ' Доп. текст со страницы: ' + rawExcerpt : ''}]`;
     const existingVal = promptEl.value.trim();
     promptEl.value = existingVal + tag;
     promptEl.style.borderColor = 'var(--accent)';

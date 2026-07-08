@@ -780,7 +780,8 @@ Rules:
 
 app.post('/api/generate-idea', async (req, res) => {
   try {
-    const { model = 'seedance', format = 'cinematic', duration = 5, productName = '' } = req.body || {};
+    const { model = 'seedance', format = 'cinematic', duration = 5, productName = '',
+            productDescription = '', productCharacteristics = '', isService = false, productRawText = '' } = req.body || {};
 
     const anthropicKey  = req.headers['x-anthropic-key'] || process.env.ANTHROPIC_API_KEY || '';
     const openrouterKey = req.headers['x-openrouter-key'] || process.env.OPENROUTER_API_KEY || '';
@@ -790,7 +791,17 @@ app.post('/api/generate-idea', async (req, res) => {
 
     const modelName = model === 'veo' ? 'Veo 3' : model === 'omni' ? 'Gemini Omni' : 'Seedance 2.0';
     const formatName = FORMAT_NAMES[format] || format;
-    const userMsg = `Товар: ${productName ? productName : 'товар (конкретное название не указано — придумай под универсальный потребительский продукт)'}
+    // Раньше сюда уходило только голое название карточки (productName) — описание,
+    // характеристики и цены из карточки (в т.ч. услуг espadent) не участвовали в
+    // идее вообще, из-за чего идея для конкретной услуги получалась общей "про
+    // стоматологию", без единого слова о самой услуге.
+    const detailsLine = (productDescription || productCharacteristics)
+      ? `\nОписание: ${productDescription.slice(0, 500)}${productCharacteristics ? '\nХарактеристики/цены: ' + productCharacteristics.slice(0, 500) : ''}${productRawText ? '\nДоп. текст со страницы услуги: ' + productRawText.slice(0, 1200) : ''}`
+      : '';
+    const serviceLine = isService && productName
+      ? `\nЭто конкретная услуга клиники — идея ДОЛЖНА явно называть именно эту услугу ("${productName}") в озвучке/диалоге персонажа, а не быть общим роликом про клинику/стоматологию вообще.`
+      : '';
+    const userMsg = `Товар: ${productName ? productName : 'товар (конкретное название не указано — придумай под универсальный потребительский продукт)'}${detailsLine}${serviceLine}
 Формат ролика: ${formatName}
 Длительность: ${duration} секунд
 Модель генерации: ${modelName}
@@ -863,10 +874,16 @@ app.post('/api/enhance-prompt', async (req, res) => {
     // Промпт может содержать тег [PRODUCT REFERENCE: ...] — из анализа фото (🔍 Анализ)
     // или из карточки товара WB. При вольном пересказе идеи модель легко теряет точные
     // детали (цвет, текст на упаковке, материал), поэтому выносим их отдельно и требуем
-    // сохранить дословно, а не растворять в общей формулировке.
-    const productMatch = prompt.match(/\[PRODUCT REFERENCE:\s*([\s\S]*?)\]/i);
+    // сохранить дословно, а не растворять в общей формулировке. Карточки услуг (espadent)
+    // помечаются отдельным тегом [SERVICE REFERENCE: ...] (см. vcardActivate) — для них
+    // мало просто сохранить детали, нужно ЕЩЁ явно назвать услугу в самой озвучке,
+    // иначе ролик получается "про стоматологию вообще", а не про конкретную карточку.
+    const productMatch = prompt.match(/\[(PRODUCT|SERVICE) REFERENCE:\s*([\s\S]*?)\]/i);
+    const isServiceRef = !!productMatch && /^service$/i.test(productMatch[1]);
+    const refBody = productMatch ? productMatch[2].trim() : '';
+    const serviceName = isServiceRef ? refBody.split('.')[0].trim() : '';
     const productNote = productMatch
-      ? `\n\nEXACT PRODUCT DETAILS (from photo analysis or product card) — these specifics MUST be preserved precisely in the rewritten prompt, do not generalize, paraphrase away, or drop any of them (colors, text/logos, materials, shape, packaging):\n"${productMatch[1].trim()}"`
+      ? `\n\nEXACT ${isServiceRef ? 'SERVICE' : 'PRODUCT'} DETAILS (from ${isServiceRef ? 'the service card' : 'photo analysis or product card'}) — these specifics MUST be preserved precisely in the rewritten prompt, do not generalize, paraphrase away, or drop any of them (colors, text/logos, materials, shape, packaging):\n"${refBody}"${isServiceRef ? `\n\nCRITICAL: this video advertises this EXACT named service — the voiceover/spoken dialogue MUST explicitly name it in Russian somewhere in the line (mention "${serviceName}" naturally as part of what the speaker says), not just describe generic dental imagery. Do not make a generic dental-clinic ad — tie it to this specific service by name.` : ''}`
       : '';
 
     const userMsg = `Original idea (may be in Russian or any language): "${prompt}"
