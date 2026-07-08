@@ -587,6 +587,12 @@ async function espadentFetchCard(url) {
       value: espadentClean(it.price) + (it.extra ? ' — ' + espadentClean(it.extra).replace(/\n/g, ', ') : ''),
     }));
     if (data.doctor) characteristics.push({ name: 'Врач', value: espadentClean(data.doctor).replace(/\n/g, ', ') });
+    // Название клиники — хардкод, а не спарсенное с og:title (сайт сам пишет
+    // непоследовательно: то "ЭспаДен", то "«ЭспаДент»"). Эта функция парсит только
+    // espadent.ru, поэтому бренд всегда один и тот же. enhance-prompt требует
+    // использовать ИМЕННО это имя, если в ролике вообще упоминается клиника —
+    // без этого модель придумывала placeholder вроде "Клиника Улыбки".
+    characteristics.push({ name: 'Клиника', value: 'ЭспаДент' });
     // Телефон — отдельная характеристика, а не просто текст в описании: enhance-prompt
     // и generate-idea требуют использовать ТОЛЬКО этот номер, если в ролике вообще
     // упоминается телефон, а не давать модели придумать/додумать свой.
@@ -810,8 +816,9 @@ app.post('/api/generate-idea', async (req, res) => {
       ? `\nОписание: ${productDescription.slice(0, 500)}${productCharacteristics ? '\nХарактеристики/цены: ' + productCharacteristics.slice(0, 500) : ''}${productRawText ? '\nДоп. текст со страницы услуги: ' + productRawText.slice(0, 1200) : ''}`
       : '';
     const servicePhoneMatch = productCharacteristics.match(/Телефон:\s*([^;]+)/i);
+    const serviceClinicMatch = productCharacteristics.match(/Клиника:\s*([^;]+)/i);
     const serviceLine = isService && productName
-      ? `\nЭто конкретная услуга клиники — идея ДОЛЖНА явно называть именно эту услугу ("${productName}") в озвучке/диалоге персонажа, а не быть общим роликом про клинику/стоматологию вообще.${servicePhoneMatch ? ` Если в идее упоминается номер телефона — это ДОЛЖЕН быть именно "${servicePhoneMatch[1].trim()}", без выдумывания другого номера.` : ''}`
+      ? `\nЭто конкретная услуга клиники — идея ДОЛЖНА явно называть именно эту услугу ("${productName}") в озвучке/диалоге персонажа, а не быть общим роликом про клинику/стоматологию вообще.${servicePhoneMatch ? ` Если в идее упоминается номер телефона — это ДОЛЖЕН быть именно "${servicePhoneMatch[1].trim()}", без выдумывания другого номера.` : ''}${serviceClinicMatch ? ` Если в идее упоминается название клиники — это ДОЛЖНО быть именно "${serviceClinicMatch[1].trim()}", без выдумывания другого названия.` : ''}`
       : '';
     const userMsg = `Товар: ${productName ? productName : 'товар (конкретное название не указано — придумай под универсальный потребительский продукт)'}${detailsLine}${serviceLine}
 Формат ролика: ${formatName}
@@ -899,8 +906,13 @@ app.post('/api/enhance-prompt', async (req, res) => {
     // изобретать/додумывать номер, если в ролике вообще есть телефон в кадре/озвучке.
     const phoneMatch = refBody.match(/Телефон:\s*([^;\]]+)/i);
     const servicePhone = phoneMatch ? phoneMatch[1].trim() : '';
+    // Название клиники попадает в characteristics как "Клиника: ..." (см.
+    // espadentFetchCard) — без этого модель придумывала свой placeholder вроде
+    // "Клиника Улыбки" вместо реального бренда.
+    const clinicMatch = refBody.match(/Клиника:\s*([^;\]]+)/i);
+    const serviceClinic = clinicMatch ? clinicMatch[1].trim() : '';
     const productNote = productMatch
-      ? `\n\nEXACT ${isServiceRef ? 'SERVICE' : 'PRODUCT'} DETAILS (from ${isServiceRef ? 'the service card' : 'photo analysis or product card'}) — these specifics MUST be preserved precisely in the rewritten prompt, do not generalize, paraphrase away, or drop any of them (colors, text/logos, materials, shape, packaging):\n"${refBody}"${isServiceRef ? `\n\nCRITICAL: this video advertises this EXACT named service — the voiceover/spoken dialogue MUST explicitly name it in Russian somewhere in the line (mention "${serviceName}" naturally as part of what the speaker says), not just describe generic dental imagery. Do not make a generic dental-clinic ad — tie it to this specific service by name.${servicePhone ? ` If the video shows or mentions a phone number (on-screen text or voiceover), it MUST be exactly this real number: "${servicePhone}" — never invent a different number, alter its format, or use a placeholder like "8-800-XXX-XX-XX".` : ' Do not invent or show any phone number — none was provided for this service.'}` : ''}`
+      ? `\n\nEXACT ${isServiceRef ? 'SERVICE' : 'PRODUCT'} DETAILS (from ${isServiceRef ? 'the service card' : 'photo analysis or product card'}) — these specifics MUST be preserved precisely in the rewritten prompt, do not generalize, paraphrase away, or drop any of them (colors, text/logos, materials, shape, packaging):\n"${refBody}"${isServiceRef ? `\n\nCRITICAL: this video advertises this EXACT named service — the voiceover/spoken dialogue MUST explicitly name it in Russian somewhere in the line (mention "${serviceName}" naturally as part of what the speaker says), not just describe generic dental imagery. Do not make a generic dental-clinic ad — tie it to this specific service by name.${servicePhone ? ` If the video shows or mentions a phone number (on-screen text or voiceover), it MUST be exactly this real number: "${servicePhone}" — never invent a different number, alter its format, or use a placeholder like "8-800-XXX-XX-XX".` : ' Do not invent or show any phone number — none was provided for this service.'}${serviceClinic ? ` If the video shows or mentions the clinic/business name, it MUST be exactly "${serviceClinic}" — never invent a different placeholder name (e.g. NOT "Клиника Улыбки" or similar made-up names).` : ''}` : ''}`
       : '';
 
     const userMsg = `Original idea (may be in Russian or any language): "${prompt}"
