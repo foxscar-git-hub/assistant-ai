@@ -3744,6 +3744,8 @@ document.addEventListener('DOMContentLoaded', () => {
 const CUT_STORAGE_KEY = 'cut_projects';
 let cutProjects = [];
 let cutCurrentId = null;
+let cutCurrentVideoId = null; // проект теперь может содержать НЕСКОЛЬКО оригиналов —
+                               // это тот, с которым сейчас работают вкладки 1-4
 let cutCurrentCuts = [];
 let cutCurrentFormat = 'vertical';
 
@@ -3762,6 +3764,59 @@ function cutProjCreate() {
   cutProjRender();
   cutProjSelect(id);
 }
+
+function cutGetProj() {
+  return cutProjects.find(p => p.id === cutCurrentId);
+}
+
+// Раньше состояние видео (имя/длительность/транскрипция/точки нарезки) лежало
+// прямо на объекте проекта — один проект мог работать только с одним видео.
+// Теперь оно живёт в proj.videos[videoId]; у уже существующих проектов (созданных
+// до этой доработки) переносим старые плоские поля в videos['vid_legacy'] один раз —
+// тем же id, что использует серверная миграция (cutMigrateLegacyProject), чтобы
+// клиент и сервер продолжали смотреть в одну и ту же папку на диске.
+function cutMigrateProjLegacy(proj) {
+  if (proj.videos) return;
+  proj.videos = {};
+  if (proj.videoName) {
+    proj.videos['vid_legacy'] = {
+      videoName: proj.videoName, videoDur: proj.videoDur, videoSize: proj.videoSize,
+      transcript: proj.transcript, segments: proj.segments, cuts: proj.cuts,
+    };
+    proj.activeVideoId = 'vid_legacy';
+    delete proj.videoName; delete proj.videoDur; delete proj.videoSize;
+    delete proj.transcript; delete proj.segments; delete proj.cuts;
+  }
+  cutProjSave(); // сразу фиксируем — иначе следующий cutProjLoad() из другой функции сотрёт миграцию
+}
+
+// Отрисовать вкладки 1-4 под конкретное видео (или под пустое состояние, если
+// videoState === null — видео ещё не выбрано/не загружено)
+function cutRenderVideoPanels(videoState) {
+  if (videoState?.videoName) {
+    cutShowVideoInfo(videoState.videoName, videoState.videoDur, videoState.videoSize);
+  } else {
+    document.getElementById('cut-video-info').style.display = 'none';
+  }
+  if (videoState?.transcript) {
+    document.getElementById('cut-transcript-text').textContent = videoState.transcript;
+    document.getElementById('cut-transcript-box').style.display = 'block';
+    document.getElementById('cut-transcribe-status').innerHTML = '<div class="cut-status done">✓ Транскрипция готова</div>';
+  } else {
+    document.getElementById('cut-transcript-box').style.display = 'none';
+    document.getElementById('cut-transcribe-status').innerHTML = '';
+  }
+  if (videoState?.cuts?.length) {
+    cutCurrentCuts = videoState.cuts;
+    cutRenderCutsList(videoState.cuts);
+    document.getElementById('cut-execute-row').style.display = 'block';
+  } else {
+    cutCurrentCuts = [];
+    document.getElementById('cut-cuts-list').innerHTML = '';
+    document.getElementById('cut-execute-row').style.display = 'none';
+  }
+}
+
 function cutProjSelect(id) {
   cutCurrentId = id;
   cutProjRender();
@@ -3771,32 +3826,18 @@ function cutProjSelect(id) {
   // Reset upload status
   document.getElementById('cut-upload-status').style.display = 'none';
   document.getElementById('cut-drop-zone').style.display = 'flex';
-  // Check video info
-  const proj = cutProjects.find(p => p.id === id);
-  if (proj?.videoName) {
-    cutShowVideoInfo(proj.videoName, proj.videoDur, proj.videoSize);
-  } else {
-    document.getElementById('cut-video-info').style.display = 'none';
+
+  const proj = cutGetProj();
+  if (proj) cutMigrateProjLegacy(proj);
+  cutCurrentVideoId = proj?.activeVideoId && proj.videos[proj.activeVideoId] ? proj.activeVideoId : null;
+  // Если активное видео не задано, но какие-то видео в проекте всё же есть —
+  // берём последнее добавленное, чтобы не показывать пустое состояние зря
+  if (!cutCurrentVideoId && proj?.videos && Object.keys(proj.videos).length) {
+    cutCurrentVideoId = Object.keys(proj.videos).pop();
+    proj.activeVideoId = cutCurrentVideoId;
+    cutProjSave();
   }
-  // Show transcript if exists
-  if (proj?.transcript) {
-    document.getElementById('cut-transcript-text').textContent = proj.transcript;
-    document.getElementById('cut-transcript-box').style.display = 'block';
-    document.getElementById('cut-transcribe-status').innerHTML = '<div class="cut-status done">✓ Транскрипция готова</div>';
-  } else {
-    document.getElementById('cut-transcript-box').style.display = 'none';
-    document.getElementById('cut-transcribe-status').innerHTML = '';
-  }
-  // Show cuts if exist
-  if (proj?.cuts?.length) {
-    cutCurrentCuts = proj.cuts;
-    cutRenderCutsList(proj.cuts);
-    document.getElementById('cut-execute-row').style.display = 'block';
-  } else {
-    cutCurrentCuts = [];
-    document.getElementById('cut-cuts-list').innerHTML = '';
-    document.getElementById('cut-execute-row').style.display = 'none';
-  }
+  cutRenderVideoPanels(cutCurrentVideoId ? proj.videos[cutCurrentVideoId] : null);
 }
 function cutProjRename(id) {
   const proj = cutProjects.find(p => p.id === id);
@@ -3838,7 +3879,7 @@ function cutProjDelete(id) {
   cutProjRender();
 }
 
-// ── Файловая библиотека ──
+// ── Файловая библиотека (несколько оригиналов на проект) ──
 async function cutFilesLoad() {
   if (!cutCurrentId) {
     document.getElementById('cut-files-empty').style.display = 'block';
@@ -3860,15 +3901,21 @@ async function cutFilesLoad() {
   list.innerHTML = d.files.map(f => {
     const sizeMb = (f.size / 1024 / 1024).toFixed(1);
     const date = new Date(f.mtime).toLocaleDateString('ru');
-    return `<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:8px;padding:12px 14px;display:flex;align-items:center;gap:12px;">
+    const active = f.videoId === cutCurrentVideoId;
+    const badges = [
+      f.hasTranscript ? '✓ транскрипция' : null,
+      f.clipsCount ? `🎬 ${f.clipsCount} клип${f.clipsCount === 1 ? '' : f.clipsCount < 5 ? 'а' : 'ов'}` : null,
+    ].filter(Boolean).join(' · ');
+    return `<div style="background:var(--card-bg);border:1px solid ${active ? 'var(--accent)' : 'var(--border)'};border-radius:8px;padding:12px 14px;display:flex;align-items:center;gap:12px;">
       <div style="font-size:28px;opacity:0.6;">🎬</div>
       <div style="flex:1;min-width:0;">
-        <div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${f.filename}</div>
-        <div style="font-size:11px;color:var(--text-muted);margin-top:3px;">${sizeMb} МБ · ${date}</div>
+        <div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${f.filename}${active ? ' <span style="color:var(--accent);font-weight:400;">· активно</span>' : ''}</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:3px;">${sizeMb} МБ · ${date}${badges ? ' · ' + badges : ''}</div>
       </div>
       <div style="display:flex;gap:6px;">
         <a href="${f.url}" download="${f.filename}" style="padding:5px 10px;background:var(--card-bg);border:1px solid var(--border);border-radius:6px;font-size:11px;color:var(--text-muted);text-decoration:none;cursor:pointer;" title="Скачать">⬇️</a>
-        <button onclick="cutFilesUseAsSource('${f.url}','${f.filename}')" style="padding:5px 10px;background:rgba(108,99,255,0.15);border:1px solid rgba(108,99,255,0.3);border-radius:6px;font-size:11px;color:var(--accent);cursor:pointer;" title="Использовать для нарезки">✂️ Нарезать</button>
+        <button onclick="cutFilesSelectVideo('${f.videoId}','${f.filename.replace(/'/g, "\\'")}',${f.size})" style="padding:5px 10px;background:rgba(108,99,255,0.15);border:1px solid rgba(108,99,255,0.3);border-radius:6px;font-size:11px;color:var(--accent);cursor:pointer;" title="Работать с этим видео (транскрипция/нарезка)" ${active ? 'disabled' : ''}>✂️ Нарезать</button>
+        <button onclick="cutFilesDeleteVideo('${f.videoId}')" style="padding:5px 8px;background:var(--card-bg);border:1px solid var(--border);border-radius:6px;font-size:11px;color:var(--text-muted);cursor:pointer;" title="Удалить видео из проекта">✕</button>
       </div>
     </div>`;
   }).join('');
@@ -3881,21 +3928,69 @@ function cutFilesUploadNew() {
 async function cutFilesHandleNew(file) {
   if (!file) return;
   if (!cutCurrentId) { alert('Сначала выберите проект слева'); return; }
-  // Reuse existing cutHandleFile logic
-  await cutHandleFile(file);
+  // Reuse existing cutUploadVideo logic — каждый вызов создаёт НОВОЕ видео
+  // (свой videoId), не перезаписывая уже загруженные.
+  await cutUploadVideo(file);
   cutFilesLoad();
 }
 
-function cutFilesUseAsSource(url, filename) {
-  // Switch to upload tab and show file as already loaded
+// Переключить активное видео проекта (то, с которым работают вкладки 1-4).
+// Подтягивает сохранённые на сервере транскрипцию/точки нарезки (см.
+// /videos/:videoId/state) — так предыдущая работа не теряется даже если её нет
+// в localStorage этого браузера (открыли на другом устройстве, почистили кэш и т.п.).
+async function cutFilesSelectVideo(videoId, filename, size) {
+  const proj = cutGetProj();
+  if (!proj) return;
+  cutMigrateProjLegacy(proj);
+  cutCurrentVideoId = videoId;
+  proj.activeVideoId = videoId;
+  if (!proj.videos[videoId]) proj.videos[videoId] = {};
+  // Имя/размер могли отсутствовать в этом браузере (например, видео добавили в
+  // другой сессии) — берём то, что реально на диске, из ответа /files.
+  if (!proj.videos[videoId].videoName && filename) proj.videos[videoId].videoName = filename;
+  if (!proj.videos[videoId].videoSize && size) proj.videos[videoId].videoSize = size;
+  cutProjSave();
+
   cutSwitchTab('upload', document.querySelector('.cut-wtab-btn'));
   document.getElementById('cut-no-proj-msg').style.display = 'none';
   document.getElementById('cut-upload-area').style.display = 'block';
-  document.getElementById('cut-video-info').style.display = 'block';
-  document.getElementById('cut-info-name').textContent = filename;
-  document.getElementById('cut-info-dur').textContent = '—';
-  document.getElementById('cut-info-size').textContent = '';
-  cutSwitchTab('transcribe', document.querySelectorAll('.cut-wtab-btn')[1]);
+
+  cutRenderVideoPanels(proj.videos[videoId]);
+  try {
+    const [stateR, probeR] = await Promise.all([
+      fetch(`/api/cut/projects/${cutCurrentId}/videos/${videoId}/state`),
+      proj.videos[videoId].videoDur ? null : fetch(`/api/cut/projects/${cutCurrentId}/probe?videoId=${encodeURIComponent(videoId)}`),
+    ]);
+    const d = await stateR.json();
+    if (d.ok) {
+      Object.assign(proj.videos[videoId], {
+        transcript: d.transcript || proj.videos[videoId].transcript,
+        segments: d.segments || proj.videos[videoId].segments,
+        cuts: d.cuts || proj.videos[videoId].cuts,
+      });
+    }
+    if (probeR) {
+      const pd = await probeR.json();
+      if (pd.ok) proj.videos[videoId].videoDur = pd.duration;
+    }
+    cutProjSave();
+    cutRenderVideoPanels(proj.videos[videoId]);
+  } catch {}
+  cutFilesLoad();
+}
+
+async function cutFilesDeleteVideo(videoId) {
+  if (!confirm('Удалить это видео из проекта вместе с транскрипцией и клипами?')) return;
+  await fetch(`/api/cut/projects/${cutCurrentId}/videos/${videoId}`, { method: 'DELETE' });
+  const proj = cutGetProj();
+  if (proj?.videos) delete proj.videos[videoId];
+  if (cutCurrentVideoId === videoId) {
+    cutCurrentVideoId = null;
+    if (proj) proj.activeVideoId = null;
+    cutRenderVideoPanels(null);
+  }
+  cutProjSave();
+  cutFilesLoad();
 }
 
 function cutSetFormat(fmt) {
@@ -3910,12 +4005,13 @@ let cutCurrentSmartCrop = null; // null = обычный центр-кроп; 0-
 
 async function cutSmartFormat() {
   if (!cutCurrentId) return alert('Сначала создайте проект');
+  if (!cutCurrentVideoId) return alert('Сначала загрузите или выберите видео');
   const panel = document.getElementById('cut-smart-panel');
   document.getElementById('cut-fmt-smart').classList.add('active');
   panel.style.display = 'block';
   panel.innerHTML = '<span style="font-size:11px;color:var(--text-muted);">⏳ Определяю формат оригинала...</span>';
   try {
-    const r = await fetch('/api/cut/projects/' + encodeURIComponent(cutCurrentId) + '/probe');
+    const r = await fetch('/api/cut/projects/' + encodeURIComponent(cutCurrentId) + '/probe?videoId=' + encodeURIComponent(cutCurrentVideoId));
     const d = await r.json();
     if (!d.ok) throw new Error(d.error);
     const srcVertical = d.height > d.width;
@@ -3993,11 +4089,15 @@ async function cutUploadVideo(file) {
   badge.className = 'cut-status working';
   badge.textContent = '⏳ Загрузка...';
 
+  // Каждая загрузка — НОВОЕ видео (свой videoId), не перезаписывает уже
+  // загруженные оригиналы того же проекта.
+  const videoId = 'vid_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+
   try {
     const form = new FormData();
     form.append('video', file);
     form.append('projectId', cutCurrentId);
-    const r = await fetch('/api/cut/upload?projectId=' + encodeURIComponent(cutCurrentId), {
+    const r = await fetch('/api/cut/upload?projectId=' + encodeURIComponent(cutCurrentId) + '&videoId=' + encodeURIComponent(videoId), {
       method: 'POST',
       body: form,
     });
@@ -4005,13 +4105,14 @@ async function cutUploadVideo(file) {
     if (!d.ok) throw new Error(d.error);
     badge.className = 'cut-status done';
     badge.textContent = '✓ Загружено успешно';
-    // Save to project
+
     cutProjLoad();
     const proj = cutProjects.find(p => p.id === cutCurrentId);
     if (proj) {
-      proj.videoName = file.name;
-      proj.videoDur = d.duration;
-      proj.videoSize = d.size;
+      cutMigrateProjLegacy(proj);
+      proj.videos[videoId] = { videoName: file.name, videoDur: d.duration, videoSize: d.size };
+      proj.activeVideoId = videoId;
+      cutCurrentVideoId = videoId;
       cutProjSave();
     }
     cutShowVideoInfo(file.name, d.duration, d.size);
@@ -4023,6 +4124,7 @@ async function cutUploadVideo(file) {
 
 async function cutTranscribe() {
   if (!cutCurrentId) return alert('Нет активного проекта');
+  if (!cutCurrentVideoId) return alert('Сначала загрузите или выберите видео');
   const openaiKey = localStorage.getItem('openai_api_key') || '';
   if (!openaiKey) return alert('Добавьте OpenAI API ключ в настройках ⚙️');
 
@@ -4037,7 +4139,7 @@ async function cutTranscribe() {
     const r = await fetch('/api/cut/transcribe', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ projectId: cutCurrentId, openaiKey }),
+      body: JSON.stringify({ projectId: cutCurrentId, videoId: cutCurrentVideoId, openaiKey }),
     });
     const d = await r.json();
     if (!d.ok) throw new Error(d.error);
@@ -4046,10 +4148,16 @@ async function cutTranscribe() {
     document.getElementById('cut-transcript-text').textContent = d.transcript;
     document.getElementById('cut-transcript-box').style.display = 'block';
 
-    // Save transcript to project
+    // Save transcript into this video's slot
     cutProjLoad();
     const proj = cutProjects.find(p => p.id === cutCurrentId);
-    if (proj) { proj.transcript = d.transcript; proj.segments = d.segments; cutProjSave(); }
+    if (proj) {
+      cutMigrateProjLegacy(proj);
+      if (!proj.videos[cutCurrentVideoId]) proj.videos[cutCurrentVideoId] = {};
+      proj.videos[cutCurrentVideoId].transcript = d.transcript;
+      proj.videos[cutCurrentVideoId].segments = d.segments;
+      cutProjSave();
+    }
   } catch (e) {
     statusEl.innerHTML = '<div class="cut-status error">✗ ' + e.message + '</div>';
   } finally {
@@ -4060,8 +4168,9 @@ async function cutTranscribe() {
 
 async function cutAnalyze() {
   if (!cutCurrentId) return alert('Нет активного проекта');
-  const proj = cutProjects.find(p => p.id === cutCurrentId);
-  if (!proj?.transcript) return alert('Сначала транскрибируйте видео');
+  if (!cutCurrentVideoId) return alert('Сначала загрузите или выберите видео');
+  const proj = cutGetProj();
+  if (!proj?.videos?.[cutCurrentVideoId]?.transcript) return alert('Сначала транскрибируйте видео');
 
   const anthropicKey = localStorage.getItem('anthropic_api_key') || '';
   const openrouterKey = localStorage.getItem('openrouter_api_key') || '';
@@ -4082,7 +4191,7 @@ async function cutAnalyze() {
     const r = await fetch('/api/cut/analyze', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ projectId: cutCurrentId, count, duration, format: cutCurrentFormat, anthropicKey, openrouterKey }),
+      body: JSON.stringify({ projectId: cutCurrentId, videoId: cutCurrentVideoId, count, duration, format: cutCurrentFormat, anthropicKey, openrouterKey }),
     });
     const d = await r.json();
     if (!d.ok) throw new Error(d.error);
@@ -4092,10 +4201,15 @@ async function cutAnalyze() {
     cutRenderCutsList(d.cuts);
     document.getElementById('cut-execute-row').style.display = 'block';
 
-    // Save cuts
+    // Save cuts into this video's slot
     cutProjLoad();
     const p = cutProjects.find(p => p.id === cutCurrentId);
-    if (p) { p.cuts = d.cuts; cutProjSave(); }
+    if (p) {
+      cutMigrateProjLegacy(p);
+      if (!p.videos[cutCurrentVideoId]) p.videos[cutCurrentVideoId] = {};
+      p.videos[cutCurrentVideoId].cuts = d.cuts;
+      cutProjSave();
+    }
   } catch (e) {
     statusEl.innerHTML = '<div class="cut-status error">✗ ' + e.message + '</div>';
   } finally {
@@ -4120,6 +4234,7 @@ function cutRenderCutsList(cuts) {
 
 async function cutExecute() {
   if (!cutCurrentId || !cutCurrentCuts.length) return;
+  if (!cutCurrentVideoId) return alert('Сначала загрузите или выберите видео');
   const btn = document.getElementById('cut-execute-btn');
   const statusEl = document.getElementById('cut-execute-status');
   btn.disabled = true;
@@ -4130,7 +4245,7 @@ async function cutExecute() {
     const r = await fetch('/api/cut/execute', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ projectId: cutCurrentId, cuts: cutCurrentCuts, format: cutCurrentFormat, smartCrop: cutCurrentSmartCrop }),
+      body: JSON.stringify({ projectId: cutCurrentId, videoId: cutCurrentVideoId, cuts: cutCurrentCuts, format: cutCurrentFormat, smartCrop: cutCurrentSmartCrop }),
     });
     const d = await r.json();
     if (!d.ok) throw new Error(d.error);
@@ -4149,11 +4264,11 @@ async function cutExecute() {
 }
 
 async function cutGalleryLoad() {
-  if (!cutCurrentId) return;
+  if (!cutCurrentId || !cutCurrentVideoId) return;
   const grid = document.getElementById('cut-gallery-grid');
   const empty = document.getElementById('cut-gallery-empty');
   try {
-    const r = await fetch('/api/cut/projects/' + encodeURIComponent(cutCurrentId) + '/clips');
+    const r = await fetch('/api/cut/projects/' + encodeURIComponent(cutCurrentId) + '/clips?videoId=' + encodeURIComponent(cutCurrentVideoId));
     const d = await r.json();
     if (!d.ok || !d.clips.length) {
       grid.style.display = 'none';
@@ -4163,8 +4278,8 @@ async function cutGalleryLoad() {
     empty.style.display = 'none';
     grid.style.display = 'grid';
     // Fallback titles for clips cut before meta.json existed: take them from saved analysis
-    const proj = cutProjects.find(p => p.id === cutCurrentId);
-    const savedCuts = proj?.cuts || [];
+    const proj = cutGetProj();
+    const savedCuts = proj?.videos?.[cutCurrentVideoId]?.cuts || [];
     grid.innerHTML = d.clips.map(c => {
       let title = c.title;
       const m = c.filename.match(/^clip_(\d+)\.mp4$/);
@@ -4193,10 +4308,10 @@ async function cutGalleryLoad() {
 }
 
 async function cutClipDelete(filename) {
-  if (!cutCurrentId) return;
+  if (!cutCurrentId || !cutCurrentVideoId) return;
   if (!confirm('Удалить клип «' + filename + '» с диска? Это действие необратимо.')) return;
   try {
-    const r = await fetch('/api/cut/projects/' + encodeURIComponent(cutCurrentId) + '/clips/' + encodeURIComponent(filename), { method: 'DELETE' });
+    const r = await fetch('/api/cut/projects/' + encodeURIComponent(cutCurrentId) + '/clips/' + encodeURIComponent(filename) + '?videoId=' + encodeURIComponent(cutCurrentVideoId), { method: 'DELETE' });
     const d = await r.json();
     if (!d.ok) throw new Error(d.error || 'Не удалось удалить');
     cutGalleryLoad();

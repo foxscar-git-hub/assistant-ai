@@ -8,11 +8,17 @@ const multer = require('multer');
 const FFMPEG = path.join(__dirname, 'node_modules/ffmpeg-static/ffmpeg');
 
 // ── multer for cut uploads ──
+// Каждое видео — своя папка videos/<videoId>/ внутри проекта (а не один общий
+// original.* на весь проект), иначе второй загруженный ролик стирал первый и
+// его transcript.json/клипы. videoId приходит в query (как и projectId) —
+// доступен в destination-колбэке ДО того, как multer разберёт multipart-тело.
 const cutStorage = multer.diskStorage({
   destination(req, file, cb) {
     const projectId = req.body?.projectId || req.query?.projectId || ('proj_' + Date.now());
+    const videoId = req.query?.videoId || ('vid_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7));
     req._cutProjectId = projectId;
-    const dir = path.join(__dirname, 'data', 'cut-uploads', projectId);
+    req._cutVideoId = videoId;
+    const dir = path.join(__dirname, 'data', 'cut-uploads', projectId, 'videos', videoId);
     fs.mkdirSync(dir, { recursive: true });
     cb(null, dir);
   },
@@ -1322,6 +1328,38 @@ function getVideoInfo(filePath) {
   });
 }
 
+// ── Мульти-видео на проект ──
+// Раньше на проект был ровно один "original.*" прямо в его папке — второй
+// загруженный ролик просто перезаписывал файл (то же имя), а transcript.json/
+// clips/ были общими на проект и не сбрасывались, так что после замены видео
+// показывали транскрипцию и клипы от СТАРОГО ролика. Теперь у каждого видео
+// своя папка videos/<videoId>/. cutMigrateLegacyProject() один раз переносит
+// старый плоский layout в videos/vid_legacy/ — вызывается лениво при первом
+// обращении к списку видео проекта, идемпотентно (если videos/ уже есть — no-op).
+function cutProjectDir(projectId) {
+  return path.join(__dirname, 'data', 'cut-uploads', path.basename(projectId));
+}
+function cutVideoDir(projectId, videoId) {
+  return path.join(cutProjectDir(projectId), 'videos', path.basename(videoId));
+}
+function cutMigrateLegacyProject(projectId) {
+  const dir = cutProjectDir(projectId);
+  const videosDir = path.join(dir, 'videos');
+  if (fs.existsSync(videosDir)) return; // уже мигрировано или уже новый проект
+  if (!fs.existsSync(dir)) return; // проекта ещё нет вообще — нечего мигрировать
+  const legacyFiles = fs.readdirSync(dir).filter(f => f.startsWith('original.'));
+  fs.mkdirSync(videosDir, { recursive: true });
+  if (!legacyFiles.length) return;
+  const legacyDir = path.join(videosDir, 'vid_legacy');
+  fs.mkdirSync(legacyDir, { recursive: true });
+  [...legacyFiles, 'video-info.json', 'transcript.json', 'whisper-audio.mp3'].forEach((f) => {
+    const src = path.join(dir, f);
+    if (fs.existsSync(src)) fs.renameSync(src, path.join(legacyDir, f));
+  });
+  const clipsSrc = path.join(dir, 'clips');
+  if (fs.existsSync(clipsSrc)) fs.renameSync(clipsSrc, path.join(legacyDir, 'clips'));
+}
+
 // POST /api/cut/upload
 app.post('/api/cut/upload', (req, res, next) => {
   // Parse projectId from query or body before multer reads body
@@ -1332,11 +1370,12 @@ app.post('/api/cut/upload', (req, res, next) => {
   try {
     if (!req.file) return res.json({ ok: false, error: 'Файл не передан' });
     const projectId = req.body?.projectId || req._cutProjectId || ('proj_' + Date.now());
+    const videoId = req._cutVideoId;
     const filePath = req.file.path;
     const size = req.file.size;
     const info = await getVideoInfo(filePath);
     try { fs.writeFileSync(path.join(path.dirname(filePath), 'video-info.json'), JSON.stringify(info)); } catch {}
-    res.json({ ok: true, projectId, filePath, duration: info.duration, size, width: info.width, height: info.height });
+    res.json({ ok: true, projectId, videoId, filePath, duration: info.duration, size, width: info.width, height: info.height });
   } catch (e) {
     res.json({ ok: false, error: e.message });
   }
@@ -1345,13 +1384,14 @@ app.post('/api/cut/upload', (req, res, next) => {
 // POST /api/cut/transcribe
 app.post('/api/cut/transcribe', async (req, res) => {
   try {
-    const { projectId, openaiKey } = req.body || {};
+    const { projectId, videoId, openaiKey } = req.body || {};
     if (!projectId) return res.json({ ok: false, error: 'projectId обязателен' });
+    if (!videoId) return res.json({ ok: false, error: 'videoId обязателен' });
     if (!openaiKey) return res.json({ ok: false, error: 'openaiKey обязателен' });
 
-    const dir = path.join(__dirname, 'data', 'cut-uploads', projectId);
+    const dir = cutVideoDir(projectId, videoId);
     // Find original file
-    const files = fs.readdirSync(dir).filter(f => f.startsWith('original.'));
+    const files = fs.existsSync(dir) ? fs.readdirSync(dir).filter(f => f.startsWith('original.')) : [];
     if (!files.length) return res.json({ ok: false, error: 'Видео не найдено. Загрузите файл.' });
     const videoPath = path.join(dir, files[0]);
 
@@ -1392,10 +1432,11 @@ app.post('/api/cut/transcribe', async (req, res) => {
 // POST /api/cut/analyze
 app.post('/api/cut/analyze', async (req, res) => {
   try {
-    const { projectId, count = 5, duration = 30, format = 'vertical', openrouterKey, anthropicKey } = req.body || {};
+    const { projectId, videoId, count = 5, duration = 30, format = 'vertical', openrouterKey, anthropicKey } = req.body || {};
     if (!projectId) return res.json({ ok: false, error: 'projectId обязателен' });
+    if (!videoId) return res.json({ ok: false, error: 'videoId обязателен' });
 
-    const dir = path.join(__dirname, 'data', 'cut-uploads', projectId);
+    const dir = cutVideoDir(projectId, videoId);
     const transcriptPath = path.join(dir, 'transcript.json');
     if (!fs.existsSync(transcriptPath)) return res.json({ ok: false, error: 'Транскрипция не найдена. Сначала транскрибируйте видео.' });
     const { transcript, segments } = JSON.parse(fs.readFileSync(transcriptPath, 'utf8'));
@@ -1459,6 +1500,9 @@ Rules:
     const jsonMatch = resultText.match(/\[[\s\S]*\]/);
     if (!jsonMatch) return res.json({ ok: false, error: 'AI не вернул корректный JSON. Ответ: ' + resultText.slice(0, 200) });
     const cuts = JSON.parse(jsonMatch[0]);
+    // Сохраняем на диск — без этого точки нарезки жили только в localStorage
+    // браузера и терялись при повторном открытии видео в другой сессии/браузере.
+    try { fs.writeFileSync(path.join(dir, 'cuts.json'), JSON.stringify(cuts, null, 2)); } catch {}
     res.json({ ok: true, cuts });
   } catch (e) {
     res.json({ ok: false, error: e.message });
@@ -1468,11 +1512,12 @@ Rules:
 // POST /api/cut/execute
 app.post('/api/cut/execute', async (req, res) => {
   try {
-    const { projectId, cuts, format = 'vertical', smartCrop = null } = req.body || {};
+    const { projectId, videoId, cuts, format = 'vertical', smartCrop = null } = req.body || {};
     if (!projectId || !cuts?.length) return res.json({ ok: false, error: 'projectId и cuts обязательны' });
+    if (!videoId) return res.json({ ok: false, error: 'videoId обязателен' });
 
-    const dir = path.join(__dirname, 'data', 'cut-uploads', projectId);
-    const files = fs.readdirSync(dir).filter(f => f.startsWith('original.'));
+    const dir = cutVideoDir(projectId, videoId);
+    const files = fs.existsSync(dir) ? fs.readdirSync(dir).filter(f => f.startsWith('original.')) : [];
     if (!files.length) return res.json({ ok: false, error: 'Видео не найдено' });
     const videoPath = path.join(dir, files[0]);
 
@@ -1519,7 +1564,7 @@ app.post('/api/cut/execute', async (req, res) => {
         outPath,
       ]);
 
-      const url = `/cut-files/${projectId}/clips/clip_${i + 1}.mp4`;
+      const url = `/cut-files/${projectId}/videos/${videoId}/clips/clip_${i + 1}.mp4`;
       resultClips.push({ path: outPath, url, title: cut.title || `Клип ${i + 1}` });
     }
 
@@ -1536,10 +1581,12 @@ app.post('/api/cut/execute', async (req, res) => {
   }
 });
 
-// GET /api/cut/projects/:projectId/probe — размеры и ориентация оригинала (с кэшем)
+// GET /api/cut/projects/:projectId/probe?videoId=... — размеры и ориентация оригинала (с кэшем)
 app.get('/api/cut/projects/:projectId/probe', async (req, res) => {
   try {
-    const dir = path.join(__dirname, 'data', 'cut-uploads', path.basename(req.params.projectId));
+    const { videoId } = req.query;
+    if (!videoId) return res.json({ ok: false, error: 'videoId обязателен' });
+    const dir = cutVideoDir(req.params.projectId, videoId);
     const infoPath = path.join(dir, 'video-info.json');
     try {
       const cached = JSON.parse(fs.readFileSync(infoPath, 'utf8'));
@@ -1555,33 +1602,78 @@ app.get('/api/cut/projects/:projectId/probe', async (req, res) => {
   }
 });
 
-// GET /api/cut/projects/:projectId/files — список оригинальных файлов проекта
+// GET /api/cut/projects/:projectId/files — список ВСЕХ оригинальных видео проекта
+// (раньше — список файлов внутри одного общего original.*, теперь папка на видео)
 app.get('/api/cut/projects/:projectId/files', (req, res) => {
   try {
-    const dir = path.join(__dirname, 'data', 'cut-uploads', req.params.projectId);
-    if (!fs.existsSync(dir)) return res.json({ ok: true, files: [] });
-    const files = fs.readdirSync(dir).filter(f => f.startsWith('original.')).map(f => {
-      const fp = path.join(dir, f);
-      const stat = fs.statSync(fp);
-      return { filename: f, size: stat.size, mtime: stat.mtimeMs, url: `/cut-files/${req.params.projectId}/${f}` };
-    });
+    const projectId = req.params.projectId;
+    cutMigrateLegacyProject(projectId);
+    const videosDir = path.join(cutProjectDir(projectId), 'videos');
+    if (!fs.existsSync(videosDir)) return res.json({ ok: true, files: [] });
+    const files = fs.readdirSync(videosDir).flatMap((videoId) => {
+      const dir = path.join(videosDir, videoId);
+      const original = fs.readdirSync(dir).filter(f => f.startsWith('original.'))[0];
+      if (!original) return [];
+      const stat = fs.statSync(path.join(dir, original));
+      const hasTranscript = fs.existsSync(path.join(dir, 'transcript.json'));
+      let clipsCount = 0;
+      try { clipsCount = fs.readdirSync(path.join(dir, 'clips')).filter(f => f.endsWith('.mp4')).length; } catch {}
+      return [{
+        videoId, filename: original, size: stat.size, mtime: stat.mtimeMs,
+        url: `/cut-files/${projectId}/videos/${videoId}/${original}`,
+        hasTranscript, clipsCount,
+      }];
+    }).sort((a, b) => b.mtime - a.mtime);
     res.json({ ok: true, files });
   } catch (e) {
     res.json({ ok: false, error: e.message });
   }
 });
 
-// GET /api/cut/projects/:projectId/clips
+// GET /api/cut/projects/:projectId/videos/:videoId/state — сохранённые на диске
+// транскрипция + точки нарезки этого видео (см. cuts.json / transcript.json).
+// Нужно, чтобы вернуться к ранее загруженному видео (в т.ч. в другом браузере/после
+// очистки localStorage) можно было без повторной транскрипции/анализа — то самое
+// "работать с ними для повторных нарезок".
+app.get('/api/cut/projects/:projectId/videos/:videoId/state', (req, res) => {
+  try {
+    const dir = cutVideoDir(req.params.projectId, req.params.videoId);
+    if (!fs.existsSync(dir)) return res.json({ ok: false, error: 'Видео не найдено' });
+    let transcript = null, segments = [], cuts = null;
+    try { ({ transcript, segments } = JSON.parse(fs.readFileSync(path.join(dir, 'transcript.json'), 'utf8'))); } catch {}
+    try { cuts = JSON.parse(fs.readFileSync(path.join(dir, 'cuts.json'), 'utf8')); } catch {}
+    res.json({ ok: true, transcript, segments, cuts });
+  } catch (e) {
+    res.json({ ok: false, error: e.message });
+  }
+});
+
+// DELETE /api/cut/projects/:projectId/videos/:videoId — удалить видео целиком (файл,
+// транскрипцию, все клипы) из библиотеки проекта
+app.delete('/api/cut/projects/:projectId/videos/:videoId', (req, res) => {
+  try {
+    const dir = cutVideoDir(req.params.projectId, req.params.videoId);
+    if (!fs.existsSync(dir)) return res.json({ ok: false, error: 'Видео не найдено' });
+    fs.rmSync(dir, { recursive: true, force: true });
+    res.json({ ok: true });
+  } catch (e) {
+    res.json({ ok: false, error: e.message });
+  }
+});
+
+// GET /api/cut/projects/:projectId/clips?videoId=...
 app.get('/api/cut/projects/:projectId/clips', (req, res) => {
   try {
-    const clipsDir = path.join(__dirname, 'data', 'cut-uploads', req.params.projectId, 'clips');
+    const { videoId } = req.query;
+    if (!videoId) return res.json({ ok: false, error: 'videoId обязателен' });
+    const clipsDir = path.join(cutVideoDir(req.params.projectId, videoId), 'clips');
     if (!fs.existsSync(clipsDir)) return res.json({ ok: true, clips: [] });
     let meta = {};
     try { meta = JSON.parse(fs.readFileSync(path.join(clipsDir, 'meta.json'), 'utf8')); } catch {}
     const files = fs.readdirSync(clipsDir).filter(f => f.endsWith('.mp4')).sort();
     const clips = files.map(f => ({
       filename: f,
-      url: `/cut-files/${req.params.projectId}/clips/${f}`,
+      url: `/cut-files/${req.params.projectId}/videos/${videoId}/clips/${f}`,
       title: meta[f] || f.replace('.mp4', '').replace(/_/g, ' '),
       mtime: fs.statSync(path.join(clipsDir, f)).mtimeMs,
     }));
@@ -1591,12 +1683,14 @@ app.get('/api/cut/projects/:projectId/clips', (req, res) => {
   }
 });
 
-// DELETE /api/cut/projects/:projectId/clips/:filename — удалить клип с диска
+// DELETE /api/cut/projects/:projectId/clips/:filename?videoId=... — удалить клип с диска
 app.delete('/api/cut/projects/:projectId/clips/:filename', (req, res) => {
   try {
+    const { videoId } = req.query;
+    if (!videoId) return res.json({ ok: false, error: 'videoId обязателен' });
     const filename = path.basename(req.params.filename);
     if (!/^[\w.-]+\.mp4$/.test(filename)) return res.json({ ok: false, error: 'Некорректное имя файла' });
-    const clipsDir = path.join(__dirname, 'data', 'cut-uploads', path.basename(req.params.projectId), 'clips');
+    const clipsDir = path.join(cutVideoDir(req.params.projectId, videoId), 'clips');
     const fp = path.join(clipsDir, filename);
     if (!fs.existsSync(fp)) return res.json({ ok: false, error: 'Файл не найден' });
     fs.unlinkSync(fp);
