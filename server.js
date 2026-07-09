@@ -355,7 +355,7 @@ app.post('/api/kie/multiangle-image', async (req, res) => {
     const desc = productDescription ? ` Product details: ${productDescription.slice(0, 300)}.` : '';
     const url = await openaiImageEdit(
       await resolveImageInput(base64),
-      `Create a product reference sheet showing this exact product from 4 angles arranged in a 2x2 grid: front view (top-left), right side view (top-right), back view (bottom-left), 45-degree angle view (bottom-right). Clean white background, professional studio lighting, product photography style.${desc} Preserve all product details, colors, textures, logos exactly.`,
+      `Create a product reference sheet showing this exact product from 4 angles arranged in a 2x2 grid: front view (top-left), right side view (top-right), back view (bottom-left), 45-degree angle view (bottom-right). Clean white background, professional studio lighting, product photography style.${desc} CRITICAL 100% FIDELITY TO THE ORIGINAL: every view must be an exact 1:1 replica of the reference product — identical colors, materials, textures, logos, proportions and overall length. Carefully inspect the reference and reproduce every small construction detail exactly as it is: laces/drawstrings (present or absent, their color and how they hang), cuffs and ribbing, collar type, the exact length of the item, pockets (their number, type and placement), buttons, zippers, seams and stitching, prints, patches and labels. Do not invent or add any detail that is not in the reference, and do not omit or simplify any detail that is present.`,
       openaiKey, '1024x1024'
     );
     res.json({ ok: true, url });
@@ -380,7 +380,7 @@ app.post('/api/kie/multiangle-multi', async (req, res) => {
     const multiNote = resolved.length > 1 ? ' These are multiple reference photos of the SAME exact product from different angles/contexts — use all of them together to accurately reconstruct its true appearance.' : '';
     const url = await openaiImageEdit(
       resolved,
-      `Using the provided reference photo(s), create a single product reference sheet showing this exact product from 4 angles arranged in a 2x2 grid: front view (top-left), right side view (top-right), back view (bottom-left), 45-degree angle view (bottom-right). Clean white background, professional studio lighting, product photography style.${multiNote}${desc} Preserve all product details, colors, textures, logos exactly.`,
+      `Using the provided reference photo(s), create a single product reference sheet showing this exact product from 4 angles arranged in a 2x2 grid: front view (top-left), right side view (top-right), back view (bottom-left), 45-degree angle view (bottom-right). Clean white background, professional studio lighting, product photography style.${multiNote}${desc} CRITICAL 100% FIDELITY TO THE ORIGINAL: every view must be an exact 1:1 replica of the reference product — identical colors, materials, textures, logos, proportions and overall length. Carefully inspect the reference and reproduce every small construction detail exactly as it is: laces/drawstrings (present or absent, their color and how they hang), cuffs and ribbing, collar type, the exact length of the item, pockets (their number, type and placement), buttons, zippers, seams and stitching, prints, patches and labels. Do not invent or add any detail that is not in the reference, and do not omit or simplify any detail that is present.`,
       openaiKey, '1536x1024', true
     );
     res.json({ ok: true, url });
