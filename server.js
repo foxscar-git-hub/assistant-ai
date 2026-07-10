@@ -259,6 +259,35 @@ app.post('/api/analyze-image', async (req, res) => {
 });
 
 // ── OpenAI image editing: апскейл / мультиракурс ──
+// Промпт мультиракурсного референс-листа (общий для одиночного и мульти-варианта):
+// полный рост + портретная сетка + макро-детали — вместо прежней простой сетки 2x2
+const MULTIANGLE_PROMPT = `Создай профессиональный референс-лист (multi-angle reference sheet) на основе загруженного фото товара/персонажа.
+Сохрани абсолютно идентичными: лицо, черты, пропорции тела, цвет и текстуру материалов, все детали одежды/предмета — меняется только угол камеры.
+
+СТРУКТУРА КОМПОЗИЦИИ (единый лист, чистый белый фон, ровный студийный свет, мягкие тени):
+
+Верхний ряд (полный рост, 3 колонки):
+1. Фронтальный вид в полный рост
+2. Профиль (боковой ракурс)
+3. Вид со спины
+
+Правый блок (портретная сетка лица/головы, 2 ряда по 3):
+1. Фронтальный портрет
+2. Профиль лица
+3. Вид затылка/задняя часть головы
+4. Взгляд вниз (3/4 вниз)
+5. Взгляд вверх (3/4 вверх)
+6. Три четверти в сторону
+
+Нижний блок (макро-детали, 2 ряда по 3):
+1. Крупный план текстуры основного материала/ткани
+2. Крупный план шва/застёжки/логотипа
+3. Крупный план текстуры кожи/поверхности (борода/фактура)
+4-5. Крупный план глаз/ключевой детали лица (или логотипа для товара)
+6. Крупный план обуви/нижней части/фирменного элемента
+
+Требования: одинаковая цветовая температура и экспозиция во всех кадрах, чёткие границы между ячейками, без текста и подписей, фотореалистичный стиль, разрешение 4K, каждая ячейка выглядит как отдельный профессиональный кадр из одной съёмки.`;
+
 const VREF_PROCESSED_DIR = path.join(__dirname, 'data', 'vref-processed');
 if (!fs.existsSync(VREF_PROCESSED_DIR)) fs.mkdirSync(VREF_PROCESSED_DIR, { recursive: true });
 app.use('/vref-processed/', express.static(VREF_PROCESSED_DIR));
@@ -352,10 +381,10 @@ app.post('/api/kie/multiangle-image', async (req, res) => {
     if (!base64) return res.json({ ok: false, error: 'base64 не передан' });
     if (!openaiKey) return res.json({ ok: false, error: 'Нужен OpenAI API ключ в настройках' });
 
-    const desc = productDescription ? ` Product details: ${productDescription.slice(0, 300)}.` : '';
+    const desc = productDescription ? `\n\nДетали товара (сохранить в точности): ${productDescription.slice(0, 300)}` : '';
     const url = await openaiImageEdit(
       await resolveImageInput(base64),
-      `Create a product reference sheet showing this exact product from 4 angles arranged in a 2x2 grid: front view (top-left), right side view (top-right), back view (bottom-left), 45-degree angle view (bottom-right). Clean white background, professional studio lighting, product photography style.${desc} CRITICAL 100% FIDELITY TO THE ORIGINAL: every view must be an exact 1:1 replica of the reference product — identical colors, materials, textures, logos, proportions and overall length. Carefully inspect the reference and reproduce every small construction detail exactly as it is: laces/drawstrings (present or absent, their color and how they hang), cuffs and ribbing, collar type, the exact length of the item, pockets (their number, type and placement), buttons, zippers, seams and stitching, prints, patches and labels. Do not invent or add any detail that is not in the reference, and do not omit or simplify any detail that is present.`,
+      MULTIANGLE_PROMPT + desc,
       openaiKey, '1024x1024'
     );
     res.json({ ok: true, url });
@@ -376,11 +405,11 @@ app.post('/api/kie/multiangle-multi', async (req, res) => {
     if (!openaiKey) return res.json({ ok: false, error: 'Нужен OpenAI API ключ в настройках' });
 
     const resolved = await Promise.all(images.slice(0, 6).map(img => resolveImageInput(img)));
-    const desc = productDescription ? ` Product details: ${productDescription.slice(0, 300)}.` : '';
-    const multiNote = resolved.length > 1 ? ' These are multiple reference photos of the SAME exact product from different angles/contexts — use all of them together to accurately reconstruct its true appearance.' : '';
+    const desc = productDescription ? `\n\nДетали товара (сохранить в точности): ${productDescription.slice(0, 300)}` : '';
+    const multiNote = resolved.length > 1 ? '\n\nВсе загруженные фото — ОДИН И ТОТ ЖЕ товар/персонаж с разных ракурсов; используй их все вместе, чтобы точно реконструировать его реальный внешний вид.' : '';
     const url = await openaiImageEdit(
       resolved,
-      `Using the provided reference photo(s), create a single product reference sheet showing this exact product from 4 angles arranged in a 2x2 grid: front view (top-left), right side view (top-right), back view (bottom-left), 45-degree angle view (bottom-right). Clean white background, professional studio lighting, product photography style.${multiNote}${desc} CRITICAL 100% FIDELITY TO THE ORIGINAL: every view must be an exact 1:1 replica of the reference product — identical colors, materials, textures, logos, proportions and overall length. Carefully inspect the reference and reproduce every small construction detail exactly as it is: laces/drawstrings (present or absent, their color and how they hang), cuffs and ribbing, collar type, the exact length of the item, pockets (their number, type and placement), buttons, zippers, seams and stitching, prints, patches and labels. Do not invent or add any detail that is not in the reference, and do not omit or simplify any detail that is present.`,
+      MULTIANGLE_PROMPT + multiNote + desc,
       openaiKey, '1536x1024', true
     );
     res.json({ ok: true, url });
