@@ -1084,6 +1084,20 @@
                       <input type="file" id="vgen-omni-tiles-input" accept="image/*" multiple style="display:none;" onchange="vgenOmniTilesFile(event)">
                     </div>
 
+                    <!-- Seedance: доп. референс-фото (reference_image_urls, до 9 суммарно с first/last
+                         кадрами — см. docs.kie.ai, bytedance/seedance-2). First/last остаются
+                         отдельными блоками выше, здесь только дополнительные референсы. -->
+                    <div id="vgen-seedance-refs-section" style="display:none;">
+                      <label style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+                        <span>референсы (reference_image_urls, до 9 с кадрами)</span>
+                        <div style="display:flex;gap:6px;align-items:center;">
+                          <button onclick="vrefPickOpen('seedance')" style="background:none;border:1px solid var(--border);border-radius:5px;color:var(--text-muted);font-size:11px;cursor:pointer;padding:2px 8px;" title="Выбрать из библиотеки">📁 Библ.</button>
+                        </div>
+                      </label>
+                      <div id="vgen-seedance-refs-grid" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
+                      <input type="file" id="vgen-seedance-refs-input" accept="image/*" multiple style="display:none;" onchange="vgenSeedanceRefsFile(event)">
+                    </div>
+
                     <!-- Параметры -->
                     <div style="display:flex;flex-direction:column;gap:10px;">
                       <div>
@@ -1929,25 +1943,76 @@ function vgenUpdateImageSections() {
     if (firstLbl) firstLbl.textContent = 'first_frame_image';
     if (lastLbl)  lastLbl.textContent  = 'last_frame_image';
   }
+  // Seedance 2.0 дополнительно принимает референс-фото (reference_image_urls) —
+  // Veo на KIE такого поля не имеет, поэтому секция видна только для Seedance
+  const sdSec = document.getElementById('vgen-seedance-refs-section');
+  if (sdSec) {
+    const showSd = vgenActiveModel === 'seedance';
+    sdSec.style.display = showSd ? '' : 'none';
+    if (showSd) vgenRenderSeedanceRefs();
+  }
+}
+
+// ── Seedance: грид доп. референсов (first/last здесь не показываем — у них свои блоки выше) ──
+function vgenRenderSeedanceRefs() {
+  const grid = document.getElementById('vgen-seedance-refs-grid');
+  if (!grid) return;
+  const list = vgenState.extraImageUrls || [];
+  const tiles = list.map((url, i) => `
+    <div style="position:relative;width:72px;height:72px;">
+      <img src="${url}" style="width:100%;height:100%;object-fit:cover;border-radius:6px;border:1px solid var(--border);">
+      <button onclick="vgenRemoveExtraRef(${i})" style="position:absolute;top:-5px;right:-5px;background:#ef4444;color:#fff;border:none;border-radius:50%;width:18px;height:18px;font-size:11px;cursor:pointer;line-height:1;padding:0;">✕</button>
+    </div>`).join('');
+  const addTile = list.length < vgenExtraRefsMax() ? `
+    <div onclick="document.getElementById('vgen-seedance-refs-input').click()"
+      style="width:72px;height:72px;border:2px dashed var(--border);border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text-muted);font-size:24px;transition:border-color 0.15s;"
+      ondragover="event.preventDefault();this.style.borderColor='var(--accent)'"
+      ondragleave="this.style.borderColor='var(--border)'"
+      ondrop="vgenSeedanceRefsDrop(event)"
+      onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">+</div>` : '';
+  grid.innerHTML = tiles + addTile;
+}
+function vgenSeedanceRefsFile(event) {
+  Array.from(event.target.files).filter(vgenCheckImageSize).forEach(file => {
+    const reader = new FileReader();
+    reader.onload = () => vgenAddExtraRef(reader.result);
+    reader.readAsDataURL(file);
+  });
+  event.target.value = '';
+}
+function vgenSeedanceRefsDrop(event) {
+  event.preventDefault();
+  Array.from(event.dataTransfer.files).filter(f => f.type.startsWith('image/')).filter(vgenCheckImageSize).forEach(file => {
+    const reader = new FileReader();
+    reader.onload = () => vgenAddExtraRef(reader.result);
+    reader.readAsDataURL(file);
+  });
 }
 
 // ── Omni: единое окно референс-фото тайлами (image_urls до 7 суммарно — first/last/доп. объединены) ──
+// Seedance использует те же extraImageUrls, но со своим лимитом: reference_image_urls
+// вместе с first/last кадрами — максимум 9 (см. docs.kie.ai, bytedance/seedance-2)
+function vgenRefsTotalLimit() {
+  return vgenActiveModel === 'seedance' ? 9 : 7;
+}
 function vgenExtraRefsMax() {
   const used = (vgenState.firstImageUrl ? 1 : 0) + (vgenState.lastImageUrl ? 1 : 0);
-  return Math.max(0, 7 - used);
+  return Math.max(0, vgenRefsTotalLimit() - used);
 }
 function vgenAddExtraRef(dataUrl) {
   if (!vgenState.extraImageUrls) vgenState.extraImageUrls = [];
   if (vgenState.extraImageUrls.length >= vgenExtraRefsMax()) {
-    alert('У Omni лимит — до 7 референсов суммарно (включая First/Last frame). Уберите один, чтобы добавить другой.');
+    alert(`Лимит — до ${vgenRefsTotalLimit()} референсов суммарно (включая First/Last frame). Уберите один, чтобы добавить другой.`);
     return;
   }
   vgenState.extraImageUrls.push(dataUrl);
   vgenRenderOmniTiles();
+  vgenRenderSeedanceRefs();
 }
 function vgenRemoveExtraRef(i) {
   vgenState.extraImageUrls.splice(i, 1);
   vgenRenderOmniTiles();
+  vgenRenderSeedanceRefs();
 }
 // Единый список тайлов Omni: сперва first/last (если заданы через старые слоты), затем доп.референсы
 function vgenOmniTilesList() {
@@ -2100,9 +2165,11 @@ function vrefToggleSelect(img) {
   if (idx >= 0) {
     vrefMultiSelected.splice(idx, 1);
   } else {
-    const used = vgenOmniTilesList().length;
-    if (used + vrefMultiSelected.length >= 7) {
-      alert('У Omni лимит — до 7 референсов суммарно (включая уже добавленные). Уберите один, чтобы выбрать другой.');
+    const used = vrefPickSlot === 'seedance'
+      ? (vgenState.extraImageUrls || []).length + (vgenState.firstImageUrl ? 1 : 0) + (vgenState.lastImageUrl ? 1 : 0)
+      : vgenOmniTilesList().length;
+    if (used + vrefMultiSelected.length >= vgenRefsTotalLimit()) {
+      alert(`Лимит — до ${vgenRefsTotalLimit()} референсов суммарно (включая уже добавленные). Уберите один, чтобы выбрать другой.`);
       return;
     }
     vrefMultiSelected.push(img);
@@ -2113,7 +2180,7 @@ function vrefToggleSelect(img) {
 function vrefUpdateMultiFooter() {
   const btn = document.getElementById('vref-multi-add-btn');
   if (!btn) return;
-  if (vrefPickSlot === 'omni' && vrefMultiSelected.length) {
+  if ((vrefPickSlot === 'omni' || vrefPickSlot === 'seedance') && vrefMultiSelected.length) {
     btn.style.display = 'inline-block';
     btn.textContent = `✓ Добавить выбранные (${vrefMultiSelected.length})`;
   } else {
@@ -2122,7 +2189,9 @@ function vrefUpdateMultiFooter() {
 }
 
 function vrefConfirmMulti() {
-  vrefMultiSelected.forEach(img => vgenOmniTilesAdd(img.data));
+  // seedance: только в доп.референсы (first/last у него — отдельные осмысленные слоты);
+  // omni: заполняет первый свободный слот (first → last → доп.)
+  vrefMultiSelected.forEach(img => vrefPickSlot === 'seedance' ? vgenAddExtraRef(img.data) : vgenOmniTilesAdd(img.data));
   vrefMultiSelected = [];
   vrefClose();
 }
@@ -2152,7 +2221,7 @@ function vrefDelete(id) {
 
 function vrefPick(img) {
   if (!vrefPickSlot) return;
-  if (vrefPickSlot === 'extra') {
+  if (vrefPickSlot === 'extra' || vrefPickSlot === 'seedance') {
     vgenAddExtraRef(img.data);
   } else if (vrefPickSlot === 'omni') {
     vgenOmniTilesAdd(img.data);
@@ -3328,9 +3397,10 @@ async function vgenRun() {
       return;
     }
   }
-  // Доп. референсы (только Omni — до 7 суммарно с first/last frame)
+  // Доп. референсы: Omni — до 7 суммарно с first/last (image_urls),
+  // Seedance — до 9 суммарно (reference_image_urls, маппится на сервере)
   let extraUrls = [];
-  if (!skipImages && model === 'omni' && vgenState.extraImageUrls?.length) {
+  if (!skipImages && (model === 'omni' || model === 'seedance') && vgenState.extraImageUrls?.length) {
     vgenAnimateProgress(17);
     for (const dataUrl of vgenState.extraImageUrls) {
       const url = await vgenUploadImage(dataUrl);

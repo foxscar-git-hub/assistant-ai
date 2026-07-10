@@ -1073,6 +1073,12 @@ app.post('/api/videogen', async (req, res) => {
       input = { prompt, resolution: resolNorm, aspect_ratio, duration: String(dur), nsfw_checker: true };
       if (image_url) input.first_frame_url = image_url;
       if (end_image_url) input.last_frame_url = end_image_url;
+      // Seedance 2.0 поддерживает референс-фото: reference_image_urls — вместе с
+      // first/last кадрами суммарно максимум 9 (см. docs.kie.ai, bytedance/seedance-2)
+      if (Array.isArray(image_urls) && image_urls.length) {
+        const maxRefs = 9 - (image_url ? 1 : 0) - (end_image_url ? 1 : 0);
+        input.reference_image_urls = image_urls.slice(0, maxRefs);
+      }
     }
     const data = await kiePost('/jobs/createTask', { model: modelId, input }, reqKey);
     if (data.code !== 200 && !data.data?.taskId) {
