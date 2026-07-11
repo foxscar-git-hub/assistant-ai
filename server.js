@@ -707,6 +707,7 @@ const ENHANCE_SYSTEM = {
   seedance: (duration, format) => `You are an expert video prompt engineer for Seedance 2.0 (ByteDance).
 The video is ${duration} seconds long. Format: ${format}.
 Rules:
+- The user message gives you an original idea with a specific hook and payoff/twist — your time-marked breakdown below must clearly execute THAT exact beat, not dilute it into a generic depiction of the format. Every timed segment should visibly advance this idea's own story.
 - Open FIRST with the shot structure for this format:
   • cinematic/ad: "Montage, multi-shot Hollywood production, don't use one angle, cinematic lighting, photorealistic, 35mm film, ARRI ALEXA aesthetic"
   • viral: "Fast-cut viral social media video, high-energy multi-shot, trending aesthetic, dopamine-paced editing"
@@ -726,6 +727,7 @@ ${format === 'ugc' ? '- The creator talks directly to camera the whole time — 
   veo: (duration, format) => `You are an expert video prompt engineer for Google Veo 3.
 The video is ${duration} seconds long (Veo supports 4, 6, or 8 seconds — use closest). Format: ${format}.
 Rules:
+- The user message gives you an original idea with a specific hook and payoff/twist — your time-marked breakdown below must clearly execute THAT exact beat, not dilute it into a generic depiction of the format. Every timed segment should visibly advance this idea's own story.
 - CRITICAL: ZERO Russian or Cyrillic text allowed inside the video frame. No Russian signs, labels, subtitles, banners.
 - English infographics, charts, data visualizations ARE allowed and encouraged (especially for documentary/ad)
 - Veo generates native audio — describe the soundscape explicitly and in detail. If any character speaks (voiceover or on-camera dialogue), ${VOICE_AGE_RULE}
@@ -770,6 +772,8 @@ Rules:
 This is a 16-second video assembled from TWO separately generated 8-second Omni clips that get stitched together automatically — the first frame of Part 2 is set to the actual last frame of Part 1, so the cut must feel invisible: same pose, same environment, same lighting, action continuing exactly where Part 1 left off.
 Format: ${format}.
 
+The user message gives you an original idea with a specific hook and payoff/twist — Part 1 must clearly execute the hook, Part 2 must clearly execute the payoff/twist. Don't let the 8s time-marker structure dilute either into a generic depiction of the format.
+
 Output EXACTLY two prompts separated by a line containing only: ===PART2===
 Nothing else on that separator line, and that exact string must not appear anywhere else in the output.
 
@@ -794,6 +798,7 @@ For format "${format}" (applies to both parts): ${formatNote}
     return `You are an expert video prompt engineer for Google Gemini Omni video.
 The video is ${duration} seconds long. Format: ${format}.
 Rules:
+- The user message gives you an original idea with a specific hook and payoff/twist — your time-marked breakdown below must clearly execute THAT exact beat, not dilute it into a generic depiction of the format. Every timed segment should visibly advance this idea's own story.
 - Describe scene opening with rich visual detail: colors, textures, exact lighting conditions
 - State camera angle and movement explicitly at the start
 - Add time-based progression for this ${duration}s clip: ${buildTimeMarkers(duration)}
@@ -951,6 +956,8 @@ app.post('/api/enhance-prompt', async (req, res) => {
       : '';
 
     const userMsg = `Original idea (may be in Russian or any language): "${prompt}"
+
+CRITICAL — preserve the idea's STORY, not just its topic: this idea has a specific hook (the opening moment/action) and a specific payoff/twist. Identify both, then make sure your scene-by-scene, time-marked breakdown clearly executes that exact beat from start to finish — don't let the format's default shot-list or generic visual polish dilute it into a generic "person with the product" depiction. Every timed segment must visibly advance THIS idea's own story, not just decorate it with cinematic detail.
 
 Model: ${modelName}
 Duration: ${duration} seconds
